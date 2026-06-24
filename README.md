@@ -21,6 +21,7 @@ or revisable, hand-making guides and Q&A is slow, and a generic chatbot gives
 answers ungrounded in *your* course — off-syllabus or wrong. genius owns a study
 workspace and gives you one immersive loop: **ingest → generate → revise**, with
 every generation grounded strictly in the supplied material.
+I designed it the way I study most of the time for my CS tests to get the best marks with low effort. 
 
 ## Features
 
