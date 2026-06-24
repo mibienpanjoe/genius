@@ -1,6 +1,6 @@
 package main
 
-import "genius/internal/cli"
+import "github.com/mibienpanjoe/genius/internal/cli"
 
 func main() {
 	cli.Execute()

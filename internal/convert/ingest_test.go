@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"genius/internal/engine"
+	"github.com/mibienpanjoe/genius/internal/engine"
 )
 
 func TestNotationWarning(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"genius/internal/convert"
-	"genius/internal/workspace"
+	"github.com/mibienpanjoe/genius/internal/convert"
+	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
 var (

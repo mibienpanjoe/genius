@@ -1,4 +1,4 @@
-module genius
+module github.com/mibienpanjoe/genius
 
 go 1.25.5
 

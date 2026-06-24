@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"genius/internal/workspace"
+	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
 func TestHomeRenders(t *testing.T) {

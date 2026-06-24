@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"genius/internal/engine"
+	"github.com/mibienpanjoe/genius/internal/engine"
 )
 
 // IngestOpts tunes a fidelity-aware ingest (FR-035).

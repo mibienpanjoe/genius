@@ -6,8 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"genius/internal/quiz"
-	"genius/internal/workspace"
+	"github.com/mibienpanjoe/genius/internal/quiz"
+	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
 // state enumerates the top-level TUI screens (docs/05 §TUI states).

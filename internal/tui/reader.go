@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"genius/internal/render"
+	"github.com/mibienpanjoe/genius/internal/render"
 )
 
 // openReader loads a course artifact ("guide" or "qa") for the selected course,

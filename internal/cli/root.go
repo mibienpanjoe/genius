@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"genius/internal/tui"
-	"genius/internal/workspace"
+	"github.com/mibienpanjoe/genius/internal/tui"
+	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
 var engineFlag string

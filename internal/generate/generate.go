@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"genius/internal/engine"
+	"github.com/mibienpanjoe/genius/internal/engine"
 )
 
 //go:embed prompts/guide.txt

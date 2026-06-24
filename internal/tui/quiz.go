@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"genius/internal/quiz"
-	"genius/internal/render"
+	"github.com/mibienpanjoe/genius/internal/quiz"
+	"github.com/mibienpanjoe/genius/internal/render"
 )
 
 // renderAnswer styles a revealed answer's markdown body, trimming the trailing

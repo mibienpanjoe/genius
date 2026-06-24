@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"genius/internal/engine"
-	"genius/internal/generate"
-	"genius/internal/workspace"
+	"github.com/mibienpanjoe/genius/internal/engine"
+	"github.com/mibienpanjoe/genius/internal/generate"
+	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
 func newGuideCmd() *cobra.Command {

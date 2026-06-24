@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"genius/internal/engine"
+	"github.com/mibienpanjoe/genius/internal/engine"
 )
 
 func TestGuideRefusesEmptyMaterial(t *testing.T) {
