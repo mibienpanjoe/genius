@@ -55,11 +55,18 @@ every generation grounded strictly in the supplied material.
 ## Install
 
 ```sh
-git clone <repo> genius && cd genius
+# install the binary directly
+go install github.com/mibienpanjoe/genius@latest
+
+# …or build from a clone
+git clone https://github.com/mibienpanjoe/genius && cd genius
 go build -o genius .
-# optional: move it onto your PATH
-install -m 0755 genius ~/.local/bin/genius
+install -m 0755 genius ~/.local/bin/genius   # onto your PATH
 ```
+
+> genius is a personal study setup: it shells out to `markitdown`, `claude`, and
+> `codex`, and assumes the workspace convention below. Installing the binary is
+> not enough on its own — see [Requirements](#requirements).
 
 ## Usage
 
@@ -144,5 +151,5 @@ and weak-spot tracking.
 
 ## License
 
-Personal / educational tool. Generation cost is borne by your own
-`claude` / `codex` subscriptions.
+[MIT](LICENSE). A personal / educational tool — generation cost is borne by your
+own `claude` / `codex` subscriptions.
