@@ -236,6 +236,11 @@ end-to-end against real material, in both the CLI and the TUI — including
 in-app ingest, generation, and per-chapter scoping (v0.2.0). Post-MVP: quiz
 weak-spot tracking.
 
+## Contributing
+
+Want to help sharpen the study loop? See [CONTRIBUTING.md](CONTRIBUTING.md) for
+setup, the build/test commands, and the house style.
+
 ## License
 
 [MIT](LICENSE). A personal / educational tool — generation cost is borne by your
