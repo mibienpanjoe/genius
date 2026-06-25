@@ -16,7 +16,7 @@ import (
 type ExtractedImage struct {
 	Path string // saved asset path
 	Page int    // 1-based source page
-	W, H int     // pixel dimensions
+	W, H int    // pixel dimensions
 }
 
 // imagesAvailable reports whether poppler's pdfimages is on PATH.
