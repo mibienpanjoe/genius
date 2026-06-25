@@ -20,9 +20,10 @@ const (
 	stateHome state = iota
 	stateReader
 	stateQuiz
-	stateExSets  // pick an exercise set for the solve flow
-	stateExList  // pick exercises within a set
-	stateSolving // engine is producing the solution (spinner)
+	stateExSets     // pick an exercise set for the solve flow
+	stateExList     // pick exercises within a set
+	stateSolving    // engine is producing the solution (spinner)
+	stateGenerating // engine is producing a guide or Q&A (spinner)
 )
 
 // Model is the root Bubble Tea model: a home dashboard plus a reader and an
@@ -48,6 +49,10 @@ type Model struct {
 	solveCourse string              // course being solved
 	solveSet    string              // set being solved
 	spinner     spinner.Model       // shown while the engine runs
+
+	// generate flow (guide / qa)
+	genKind   string // "guide" or "qa" being generated
+	genCourse string // course being generated for
 
 	// reader
 	viewport  viewport.Model
@@ -104,8 +109,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case solveDoneMsg:
 		return m.solveDone(msg)
 
+	case genDoneMsg:
+		return m.genDone(msg)
+
 	case spinner.TickMsg:
-		if m.state != stateSolving {
+		if m.state != stateSolving && m.state != stateGenerating {
 			return m, nil
 		}
 		var cmd tea.Cmd
@@ -124,7 +132,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateExSets(msg)
 		case stateExList:
 			return m.updateExList(msg)
-		case stateSolving:
+		case stateSolving, stateGenerating:
 			if msg.String() == "ctrl+c" {
 				return m, tea.Quit
 			}
@@ -151,6 +159,8 @@ func (m Model) View() string {
 		body = m.viewExList()
 	case stateSolving:
 		body = m.viewSolving()
+	case stateGenerating:
+		body = m.viewGenerating()
 	default:
 		body = m.viewHome()
 	}
@@ -180,9 +190,13 @@ func (m Model) updateHome(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 	case "g", "enter":
-		return m.openReader("guide")
+		return m.generateOrOpen("guide", false)
 	case "q":
-		return m.openReader("qa")
+		return m.generateOrOpen("qa", false)
+	case "G":
+		return m.generateOrOpen("guide", true)
+	case "Q":
+		return m.generateOrOpen("qa", true)
 	case "r":
 		return m.startQuiz()
 	case "s":
@@ -201,7 +215,7 @@ func (m Model) viewStatusBar() string {
 	left := " " + m.ws.Root
 	right := "engine:" + m.engine + " "
 
-	hints := "g guide · q qa · r revise · s solve · ctrl+c quit"
+	hints := "g guide · q qa · r revise · s solve · G/Q regen · ctrl+c quit"
 	switch m.state {
 	case stateReader:
 		hints = "↑/↓ scroll · q back"
@@ -213,6 +227,8 @@ func (m Model) viewStatusBar() string {
 		hints = "↑/↓ move · space select · enter solve · esc back"
 	case stateSolving:
 		hints = "solving… · ctrl+c quit"
+	case stateGenerating:
+		hints = "generating… · ctrl+c quit"
 	}
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right) - lipgloss.Width(hints)

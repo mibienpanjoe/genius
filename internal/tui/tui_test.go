@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/mibienpanjoe/genius/internal/engine"
 	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
@@ -113,6 +114,83 @@ func TestSolveFlowNavigation(t *testing.T) {
 	}
 	if !strings.Contains(done.(Model).notice, "no engine") {
 		t.Errorf("want no-engine notice, got %q", done.(Model).notice)
+	}
+}
+
+func TestGenerateGuideFlow(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ws.Path("courses", "algebra"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ws.Path("courses", "algebra", "chap01.md"),
+		[]byte("# Algebra\nRings and fields.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	eng := &engine.Fake{Reply: "# Study Guide\n\nKey ideas."}
+	courses := []workspace.Course{{Name: "algebra"}} // no guide yet
+
+	m := New("fake", eng, ws, courses)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// g with no guide present → enters the generating state (spinner).
+	g, _ := mm.(Model).Update(keyRunes("g"))
+	if g.(Model).state != stateGenerating {
+		t.Fatalf("g should enter generating, state=%d", g.(Model).state)
+	}
+
+	// Drive the async generate command and feed its result back.
+	done, _ := g.(Model).Update(genCmd(eng, "guide", "algebra", "material")())
+	dm := done.(Model)
+	if eng.Calls != 1 {
+		t.Errorf("engine should be called once, got %d", eng.Calls)
+	}
+	if dm.state != stateReader {
+		t.Fatalf("generate should land in the reader, state=%d", dm.state)
+	}
+	if !dm.courses[0].HasGuide {
+		t.Errorf("chip count should flip: HasGuide=false")
+	}
+	data, err := os.ReadFile(ws.GuidePath("algebra"))
+	if err != nil {
+		t.Fatalf("guide not written: %v", err)
+	}
+	if !strings.Contains(string(data), "Study Guide") {
+		t.Errorf("written guide missing content: %q", data)
+	}
+}
+
+func TestGenerateNoMaterialRefuses(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ws.Path("courses", "empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	eng := &engine.Fake{Reply: "should not be called"}
+	courses := []workspace.Course{{Name: "empty"}}
+
+	m := New("fake", eng, ws, courses)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	g, _ := mm.(Model).Update(keyRunes("g"))
+	gm := g.(Model)
+	if gm.state != stateHome {
+		t.Errorf("no material should stay home, state=%d", gm.state)
+	}
+	if eng.Calls != 0 {
+		t.Errorf("engine must not run without material, got %d calls", eng.Calls)
+	}
+	if !strings.Contains(gm.notice, "no source material") {
+		t.Errorf("want no-material notice, got %q", gm.notice)
 	}
 }
 
