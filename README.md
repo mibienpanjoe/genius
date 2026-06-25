@@ -38,6 +38,8 @@ I designed it the way I study most of the time for my CS tests to get the best m
   gaps in the material flagged rather than fabricated.
 - **In-place rendering** — guides/Q&A shown as styled, scrollable markdown
   (Glamour), never leaving the environment.
+- **Self-sufficient TUI** — ingest documents, generate guides/Q&A, and scope a
+  generation to chosen chapters entirely in-app, without dropping to the CLI.
 - **Swappable engines** — `claude` (default) or `codex`, behind one interface,
   identical workflow.
 
@@ -78,7 +80,9 @@ Launch the environment (home dashboard rooted at your study workspace):
 genius
 ```
 
-Or script the actions with subcommands:
+From the home dashboard you can do everything in-app — ingest (`i`), generate a
+guide/Q&A (`g`/`q`), scope to chapters (`f`), revise (`r`), solve (`s`); see
+[Keys](#keys-tui). Or script the same actions with subcommands:
 
 ```sh
 genius ingest lecture.pdf              # → courses/lecture/lecture.md (+ assets)
@@ -95,16 +99,23 @@ genius guide logic --engine codex      # swap the generation engine
 | Key | Action |
 |-----|--------|
 | `↑`/`↓` `j`/`k` | move between courses |
-| `g` / `enter` | open the study guide |
-| `q` | open the Q&A |
+| `g` / `enter` | open the study guide (build it if missing) |
+| `q` | open the Q&A (build it if missing) |
+| `G` / `Q` | force-regenerate the guide / Q&A |
 | `r` | start a revision quiz |
 | `s` | solve exercises (pick set → pick exercises) |
+| `i` | ingest a document (in-app file browser) |
+| `f` | scope a guide/Q&A to specific chapters |
+| `?` | keybinding help |
 | `esc` | back |
 | `ctrl+c` | quit |
 
-In a quiz: type your answer → `enter` reveals → `y`/`n` (or `space`) self-grades
-→ advance. In solve: pick a set → `space` toggles exercises → `enter` solves the
-selection (or the highlighted one) and shows the worked solution in the reader.
+The TUI is self-sufficient: ingest material (`i`), generate guides/Q&A on the
+spot (`g`/`q`, or `G`/`Q` to redo), and scope a generation to chosen chapters
+(`f`) — no need to drop to the CLI. In a quiz: type your answer → `enter`
+reveals → `y`/`n` (or `space`) self-grades → advance. In solve: pick a set →
+`space` toggles exercises → `enter` solves the selection (or the highlighted
+one) and shows the worked solution in the reader.
 
 ## Organising courses
 
@@ -213,7 +224,7 @@ internal/
   convert/              markitdown ingest, figure extraction, notation repair
   generate/             grounded guide / qa / solve prompt assembly + enumerate
   render/               Glamour helper (markdown → styled string)
-  tui/                  Bubble Tea: home / reader / quiz / solve
+  tui/                  Bubble Tea: home / reader / quiz / solve / ingest / chapters / generate / help
   quiz/                 qa-markdown parser
 docs/                   01–07 design docs (PRD, SRS, architecture, …)
 ```
@@ -221,8 +232,9 @@ docs/                   01–07 design docs (PRD, SRS, architecture, …)
 ## Status
 
 Ingest, guide, qa, reader, quiz, and exercise solving (`solve`) all work
-end-to-end against real material, in both the CLI and the TUI. Post-MVP:
-TUI-driven guide/qa generation and quiz weak-spot tracking.
+end-to-end against real material, in both the CLI and the TUI — including
+in-app ingest, generation, and per-chapter scoping (v0.2.0). Post-MVP: quiz
+weak-spot tracking.
 
 ## License
 
