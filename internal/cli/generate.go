@@ -11,33 +11,62 @@ import (
 	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
+var guideFiles []string
+
 func newGuideCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "guide <course>",
 		Short: "Generate a study guide for a course",
-		Args:  cobra.ExactArgs(1),
+		Long: "Generate a study guide for a course.\n\n" +
+			"By default the guide is grounded on the WHOLE course — every .md under\n" +
+			"courses/<course>/ (all ingested chapters). Use --files to ground on\n" +
+			"specific chapter files instead, for a per-chapter guide.",
+		Example: "  # whole-course guide (all chapters)\n" +
+			"  genius guide algebra\n\n" +
+			"  # guide grounded on one chapter only\n" +
+			"  genius guide algebra --files chap03.md\n\n" +
+			"  # guide over a span of chapters\n" +
+			"  genius guide algebra --files chap01.md,chap02.md",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGuide(cmd, args[0])
 		},
 	}
+	cmd.Flags().StringSliceVar(&guideFiles, "files", nil,
+		"ground on specific chapter files under courses/<course>/ (default: all)")
+	return cmd
 }
 
 var (
 	qaCount int
 	qaScope string
+	qaFiles []string
 )
 
 func newQACmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "qa <course>",
 		Short: "Generate revision Q&A for a course",
-		Args:  cobra.ExactArgs(1),
+		Long: "Generate revision Q&A for a course.\n\n" +
+			"Grounding is the WHOLE course by default; --files narrows it to specific\n" +
+			"chapter files. --scope is different: it is a free-text focus instruction\n" +
+			"passed to the model (e.g. \"Karnaugh maps\"), not a filename — the grounding\n" +
+			"is unchanged. Combine them: --files picks the source, --scope the topic.",
+		Example: "  # 10 Q&A over the whole course\n" +
+			"  genius qa algebra\n\n" +
+			"  # 15 Q&A, narrowed to a topic (still grounded on whole course)\n" +
+			"  genius qa algebra --count 15 --scope \"Karnaugh maps\"\n\n" +
+			"  # Q&A grounded on one chapter only\n" +
+			"  genius qa algebra --files chap03.md",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runQA(cmd, args[0])
 		},
 	}
 	cmd.Flags().IntVar(&qaCount, "count", 0, "number of Q&A pairs (default 10)")
-	cmd.Flags().StringVar(&qaScope, "scope", "", "limit Q&A to a topic/section")
+	cmd.Flags().StringVar(&qaScope, "scope", "", "free-text topic focus (not a filename)")
+	cmd.Flags().StringSliceVar(&qaFiles, "files", nil,
+		"ground on specific chapter files under courses/<course>/ (default: all)")
 	return cmd
 }
 
@@ -46,7 +75,7 @@ func runGuide(cmd *cobra.Command, course string) error {
 	if err != nil {
 		return err
 	}
-	material, err := ws.CourseMaterial(course)
+	material, err := courseMaterial(ws, course, guideFiles)
 	if err != nil {
 		return groundingError(course, err)
 	}
@@ -68,7 +97,7 @@ func runQA(cmd *cobra.Command, course string) error {
 	if err != nil {
 		return err
 	}
-	material, err := ws.CourseMaterial(course)
+	material, err := courseMaterial(ws, course, qaFiles)
 	if err != nil {
 		return groundingError(course, err)
 	}
@@ -106,6 +135,15 @@ func setup(cmd *cobra.Command) (workspace.Workspace, engine.Engine, error) {
 		return ws, nil, err
 	}
 	return ws, eng, nil
+}
+
+// courseMaterial picks the grounding blob: specific chapter files when --files
+// is given, else the whole course (every .md under courses/<course>/).
+func courseMaterial(ws workspace.Workspace, course string, files []string) (string, error) {
+	if len(files) > 0 {
+		return ws.MaterialFromFiles(course, files)
+	}
+	return ws.CourseMaterial(course)
 }
 
 // groundingError maps the no-material case to a clear refusal (ERR-041).
