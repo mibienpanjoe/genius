@@ -33,6 +33,9 @@ I designed it the way I study most of the time for my CS tests to get the best m
 - **Revision Q&A** — Q&A pairs for revision, in a format the quiz loop consumes.
 - **Interactive quiz** — the signature feature: ask → answer → reveal →
   self-grade → advance, with a running score.
+- **Exercise tutoring** — enumerate a problem set, pick exercises (or sub-parts),
+  and get worked solutions grounded only in the course; solved *as stated*, with
+  gaps in the material flagged rather than fabricated.
 - **In-place rendering** — guides/Q&A shown as styled, scrollable markdown
   (Glamour), never leaving the environment.
 - **Swappable engines** — `claude` (default) or `codex`, behind one interface,
@@ -82,6 +85,8 @@ genius ingest lecture.pdf              # → courses/lecture/lecture.md (+ asset
 genius ingest td.pdf --kind exercise --course logic
 genius guide logic                     # → guides/logic.md
 genius qa logic --count 15 --scope "Boolean algebra"
+genius solve logic --set td            # list the set's exercises
+genius solve logic --set td --ex 2,3.1 # work specific exercises, grounded
 genius guide logic --engine codex      # swap the generation engine
 ```
 
@@ -93,11 +98,13 @@ genius guide logic --engine codex      # swap the generation engine
 | `g` / `enter` | open the study guide |
 | `q` | open the Q&A |
 | `r` | start a revision quiz |
+| `s` | solve exercises (pick set → pick exercises) |
 | `esc` | back |
 | `ctrl+c` | quit |
 
 In a quiz: type your answer → `enter` reveals → `y`/`n` (or `space`) self-grades
-→ advance.
+→ advance. In solve: pick a set → `space` toggles exercises → `enter` solves the
+selection (or the highlighted one) and shows the worked solution in the reader.
 
 ## Organising courses
 
@@ -149,11 +156,24 @@ genius reads it as grounding alongside ingested files. Only markdown counts —
 never copy a raw `.pdf` into the workspace; run it through `ingest` first.
 
 **Exercises** — exercise sets are filed under a course but kept apart from the
-lecture material:
+lecture material (so problems never pollute the guide/Q&A grounding):
 
 ```sh
 genius ingest td1.pdf --kind exercise --course algebra   # → exercises/algebra/td1.md
 ```
+
+Then `solve` enumerates the set and works the exercises you pick, grounded only
+in the course. The tutor solves each one **as stated** and flags any gap in the
+material rather than inventing a method.
+
+```sh
+genius solve algebra --set td1                 # list the exercises (and sub-parts)
+genius solve algebra --set td1 --ex 2,3.1      # work exercise 2 and sub-part 3.1
+genius solve algebra --set td1 --ex 2 --save   # also write td1.solutions.md (source untouched)
+```
+
+Sub-parts are addressed `<exercise>.<part>` — `3.1`, `3.a`. In the TUI, press
+`s` to do the same: pick a set, toggle exercises with `space`, `enter` to solve.
 
 ## Workspace
 
@@ -191,18 +211,18 @@ internal/
   workspace/            study-root resolution, course scan, writes
   engine/               Engine interface + claude / codex / fake
   convert/              markitdown ingest, figure extraction, notation repair
-  generate/             grounded guide / qa prompt assembly
+  generate/             grounded guide / qa / solve prompt assembly + enumerate
   render/               Glamour helper (markdown → styled string)
-  tui/                  Bubble Tea: home / reader / quiz
+  tui/                  Bubble Tea: home / reader / quiz / solve
   quiz/                 qa-markdown parser
 docs/                   01–07 design docs (PRD, SRS, architecture, …)
 ```
 
 ## Status
 
-MVP complete: ingest, guide, qa, reader, and quiz all work end-to-end against
-real material. Post-MVP: exercise tutoring (`solve`), TUI-driven generation,
-and weak-spot tracking.
+Ingest, guide, qa, reader, quiz, and exercise solving (`solve`) all work
+end-to-end against real material, in both the CLI and the TUI. Post-MVP:
+TUI-driven guide/qa generation and quiz weak-spot tracking.
 
 ## License
 
