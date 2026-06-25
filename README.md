@@ -99,6 +99,62 @@ genius guide logic --engine codex      # swap the generation engine
 In a quiz: type your answer → `enter` reveals → `y`/`n` (or `space`) self-grades
 → advance.
 
+## Organising courses
+
+A course is a **directory of markdown** under `courses/<name>/`; genius reads
+*every* `.md` there as grounding. The course name and the document filename are
+separate, which makes a few layouts fall out naturally.
+
+**Single-file course** — one lecture, one course. The course name defaults to
+the filename slug.
+
+```sh
+genius ingest lecture.pdf            # → courses/lecture/lecture.md
+genius guide lecture
+```
+
+**Multi-chapter course** — one course split across several PDFs (a chapter per
+file). Point them all at one course with `--name`; each keeps its own `.md`.
+Zero-pad the names so they sort in reading order (the grounding concatenates
+files lexically).
+
+```sh
+genius ingest chap01.pdf --name algebra      # → courses/algebra/chap01.md
+genius ingest chap02.pdf --name algebra      # → courses/algebra/chap02.md
+genius ingest chap03.pdf --name algebra
+
+genius guide algebra                         # grounded on ALL chapters
+genius guide algebra --files chap03.md       # grounded on one chapter
+genius guide algebra --files chap01.md,chap02.md   # a span of chapters
+```
+
+`--files` works the same on `qa`. Without it, generation always grounds on the
+whole course.
+
+**Topic focus vs. file scope** — two different knobs:
+
+- `--files <a.md,b.md>` chooses *which source material* is fed to the model
+  (file-level grounding).
+- `qa --scope "<text>"` is a *free-text instruction* ("focus on Karnaugh maps"),
+  not a filename — the grounding is unchanged, the model just narrows its
+  attention.
+
+```sh
+genius qa algebra --count 15 --scope "Karnaugh maps"
+genius qa algebra --files chap03.md --scope "don't-care conditions"
+```
+
+**Your own notes** — drop hand-written `.md` straight into `courses/<name>/`;
+genius reads it as grounding alongside ingested files. Only markdown counts —
+never copy a raw `.pdf` into the workspace; run it through `ingest` first.
+
+**Exercises** — exercise sets are filed under a course but kept apart from the
+lecture material:
+
+```sh
+genius ingest td1.pdf --kind exercise --course algebra   # → exercises/algebra/td1.md
+```
+
 ## Workspace
 
 genius owns a study home, resolved as `$GENIUS_HOME`, else `~/study`:
