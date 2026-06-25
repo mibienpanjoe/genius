@@ -256,7 +256,7 @@ func (m Model) viewStatusBar() string {
 	left := " " + m.ws.Root
 	right := "engine:" + m.engine + " "
 
-	hints := "↑/↓ move · enter/g guide · q qa · r revise · s solve · ? help"
+	hints := "↑/↓ move · enter/g guide · q qa · r revise · s solve · ? help · ctrl+c quit"
 	switch m.state {
 	case stateReader:
 		hints = "↑/↓ scroll · q back"
@@ -272,6 +272,13 @@ func (m Model) viewStatusBar() string {
 		hints = "generating… · ctrl+c quit"
 	case stateHelp:
 		hints = "any key to close"
+	}
+
+	// Keep the bar to a single row: truncate hints that can't fit between the
+	// root (left) and engine (right) anchors.
+	if avail := width - lipgloss.Width(left) - lipgloss.Width(right) - 2; avail >= 1 &&
+		lipgloss.Width(hints) > avail {
+		hints = fitCell(hints, avail)
 	}
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right) - lipgloss.Width(hints)
