@@ -34,19 +34,20 @@ func (m Model) generateOrOpen(kind string, force bool) (tea.Model, tea.Cmd) {
 	if has && !force {
 		return m.openReader(kind)
 	}
-	return m.startGenerate(kind, c.Name)
+	return m.startGenerate(kind, c.Name, nil)
 }
 
 // startGenerate resolves the course grounding and kicks off guide/qa generation
 // asynchronously with a spinner, mirroring the solve flow. It refuses up front
-// when no engine is wired or the course has no material (INV-05).
-func (m Model) startGenerate(kind, course string) (tea.Model, tea.Cmd) {
+// when no engine is wired or the course has no material (INV-05). When files is
+// non-empty the grounding is scoped to those chapters (FR-055).
+func (m Model) startGenerate(kind, course string, files []string) (tea.Model, tea.Cmd) {
 	if m.eng == nil {
 		m.notice = "no engine available to generate"
 		m.noticeLvl = lvlWarn
 		return m, nil
 	}
-	material, err := m.ws.CourseMaterial(course)
+	material, err := m.courseGrounding(course, files)
 	if err != nil {
 		if errors.Is(err, workspace.ErrNoMaterial) {
 			m.notice = "course " + course + " has no source material — ingest a document first"
@@ -64,6 +65,15 @@ func (m Model) startGenerate(kind, course string) (tea.Model, tea.Cmd) {
 		return m, genCmd(m.eng, kind, course, material)
 	}
 	return m, tea.Batch(m.spinner.Tick, genCmd(m.eng, kind, course, material))
+}
+
+// courseGrounding returns the grounding blob for a generation: the whole course
+// by default, or only the named chapter files when files is non-empty.
+func (m Model) courseGrounding(course string, files []string) (string, error) {
+	if len(files) > 0 {
+		return m.ws.MaterialFromFiles(course, files)
+	}
+	return m.ws.CourseMaterial(course)
 }
 
 // genCmd runs the generator off the UI goroutine and reports the result. Q&A

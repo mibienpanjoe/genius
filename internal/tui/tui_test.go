@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -240,6 +241,143 @@ func TestHelpOverlay(t *testing.T) {
 	back, _ := h.(Model).Update(keyRunes("x"))
 	if back.(Model).state != stateHome {
 		t.Errorf("any key should close help, state=%d", back.(Model).state)
+	}
+}
+
+func TestWindow(t *testing.T) {
+	cases := []struct{ n, cur, max, ws, we int }{
+		{10, 0, 5, 0, 5},
+		{10, 9, 5, 5, 10},
+		{3, 1, 5, 0, 3},
+	}
+	for _, c := range cases {
+		if s, e := window(c.n, c.cur, c.max); s != c.ws || e != c.we {
+			t.Errorf("window(%d,%d,%d)=(%d,%d) want (%d,%d)", c.n, c.cur, c.max, s, e, c.ws, c.we)
+		}
+	}
+}
+
+func TestIngestBrowser(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "sub"))
+	for _, f := range []string{"a.pdf", "b.txt", "c.png", ".hidden.pdf"} {
+		mustWrite(t, filepath.Join(dir, f), "x")
+	}
+
+	m := New("claude", nil, workspace.Workspace{}, nil)
+	m.ingSelected = map[string]bool{}
+	m.loadDir(dir)
+
+	// sub/ (dir, first) + a.pdf + b.txt; .png and dotfile excluded.
+	if len(m.ingEntries) != 3 {
+		t.Fatalf("want 3 entries, got %d: %+v", len(m.ingEntries), m.ingEntries)
+	}
+	if !m.ingEntries[0].isDir || m.ingEntries[0].name != "sub" {
+		t.Errorf("directories should sort first, got %+v", m.ingEntries[0])
+	}
+
+	// Select a.pdf (index 1) with space.
+	m.ingCursor = 1
+	sel, _ := m.updateIngestPick(keyRunes(" "))
+	if !sel.(Model).ingSelected[filepath.Join(dir, "a.pdf")] {
+		t.Errorf("space should select the current file")
+	}
+
+	// Enter on the directory descends into it.
+	m.ingCursor = 0
+	desc, _ := m.updateIngestPick(tea.KeyMsg{Type: tea.KeyEnter})
+	if desc.(Model).ingDir != filepath.Join(dir, "sub") {
+		t.Errorf("enter on a dir should descend, ingDir=%q", desc.(Model).ingDir)
+	}
+}
+
+func TestIngestOptsValidation(t *testing.T) {
+	m := New("claude", nil, workspace.Workspace{}, nil)
+	m.ingSelected = map[string]bool{"/x/a.pdf": true, "/x/b.pdf": true}
+	m.ingKind = "course"
+	m.state = stateIngestOpts
+	m.ingInput.SetValue("")
+
+	res, _ := m.updateIngestOpts(tea.KeyMsg{Type: tea.KeyEnter})
+	rm := res.(Model)
+	if rm.state != stateIngestOpts {
+		t.Errorf("multi-file ingest with no name should stay on the form, state=%d", rm.state)
+	}
+	if !strings.Contains(rm.notice, "course name") {
+		t.Errorf("want a name-required notice, got %q", rm.notice)
+	}
+}
+
+func TestIngestDoneRefresh(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+
+	m := New("claude", nil, ws, nil)
+	res, _ := m.ingestDone(ingestDoneMsg{course: "algebra", ingested: 2})
+	rm := res.(Model)
+	if rm.state != stateHome {
+		t.Errorf("ingest should land home, state=%d", rm.state)
+	}
+	if len(rm.courses) != 1 || rm.courses[0].Name != "algebra" {
+		t.Errorf("course list should refresh to show algebra, got %+v", rm.courses)
+	}
+	if !strings.Contains(rm.notice, "ingested 2") {
+		t.Errorf("want an ingest summary, got %q", rm.notice)
+	}
+}
+
+func TestChaptersScopedGenerate(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+	mustWrite(t, ws.Path("courses", "algebra", "chap01.md"), "# A")
+	mustWrite(t, ws.Path("courses", "algebra", "chap02.md"), "# B")
+
+	m := New("claude", nil, ws, []workspace.Course{{Name: "algebra"}})
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	c, _ := mm.(Model).Update(keyRunes("f"))
+	cm := c.(Model)
+	if cm.state != stateChapters {
+		t.Fatalf("f should open the chapter picker, state=%d", cm.state)
+	}
+	if len(cm.chapFiles) != 2 {
+		t.Fatalf("want 2 chapters, got %d", len(cm.chapFiles))
+	}
+
+	sel, _ := cm.Update(keyRunes(" "))
+	sm := sel.(Model)
+	if got := sm.scopedChapters(); len(got) != 1 || got[0] != "chap01.md" {
+		t.Errorf("scopedChapters should reflect the toggle, got %v", got)
+	}
+
+	// g with a nil engine reports the guard (proves the key routes to generate).
+	g, _ := sm.Update(keyRunes("g"))
+	if !strings.Contains(g.(Model).notice, "no engine") {
+		t.Errorf("g should route to scoped generate, notice=%q", g.(Model).notice)
+	}
+}
+
+func mustMkdir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWrite(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -19,6 +19,14 @@ var helpKeys = []struct {
 		{"G / Q", "force-regenerate guide / q&a"},
 		{"r", "revise (quiz from q&a)"},
 		{"s", "solve exercises"},
+		{"i", "ingest a document"},
+		{"f", "scope guide/q&a to chapters"},
+	}},
+	{"ingest", [][2]string{
+		{"↑/↓", "browse · enter open dir / pick file"},
+		{"space", "select file (batch)"},
+		{"⌫", "up a directory"},
+		{"tab", "switch course / exercise kind"},
 	}},
 	{"reader", [][2]string{
 		{"↑/↓ · pgup/pgdn", "scroll"},

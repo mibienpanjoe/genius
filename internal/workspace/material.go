@@ -75,6 +75,27 @@ func (w Workspace) ExerciseSets(course string) ([]string, error) {
 	return sets, nil
 }
 
+// CourseFiles lists the chapter markdown filenames under courses/<name>/,
+// sorted. These are the units a scoped guide/Q&A can ground on (FR-055). A
+// missing course directory yields an empty list.
+func (w Workspace) CourseFiles(name string) ([]string, error) {
+	entries, err := os.ReadDir(w.Path("courses", name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			files = append(files, e.Name())
+		}
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
 // MaterialFromFiles concatenates specific markdown files (relative to
 // courses/<name>/) for scoped generation (FR-055). Missing files are an error.
 func (w Workspace) MaterialFromFiles(name string, files []string) (string, error) {

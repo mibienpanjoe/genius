@@ -27,6 +27,10 @@ const (
 	stateSolving    // engine is producing the solution (spinner)
 	stateGenerating // engine is producing a guide or Q&A (spinner)
 	stateHelp       // keybinding reference overlay
+	stateIngestPick // browse the filesystem to choose document(s)
+	stateIngestOpts // choose course/kind/flags before ingesting
+	stateIngesting  // converter is running (spinner)
+	stateChapters   // pick chapters to scope a guide/Q&A
 )
 
 // Notice severity levels — drive the glyph and color so meaning is never carried
@@ -65,6 +69,23 @@ type Model struct {
 	genKind   string // "guide" or "qa" being generated
 	genCourse string // course being generated for
 
+	// ingest flow
+	ingDir      string          // directory currently browsed
+	ingEntries  []dirEntry      // dirs + ingestable files in ingDir
+	ingCursor   int             // cursor in the browser
+	ingSelected map[string]bool // chosen file paths (batch)
+	ingInput    textinput.Model // target course/set name
+	ingKind     string          // "course" or "exercise"
+	ingDescribe bool            // vision-caption figures
+	ingOverlay  bool            // overwrite existing targets
+	ingField    int             // active field in the options form
+
+	// chapter-scope flow (per-chapter guide/Q&A)
+	chapCourse   string       // course whose chapters are listed
+	chapFiles    []string     // chapter filenames
+	chapCursor   int          // cursor in the chapter list
+	chapSelected map[int]bool // toggled chapters
+
 	// reader
 	viewport  viewport.Model
 	vpReady   bool
@@ -100,6 +121,10 @@ func New(engineName string, eng engine.Engine, ws workspace.Workspace, courses [
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(cPrimary)
 
+	ing := textinput.New()
+	ing.Placeholder = "course name"
+	ing.CharLimit = 64
+
 	return Model{
 		state:        stateHome,
 		engine:       engineName,
@@ -108,6 +133,9 @@ func New(engineName string, eng engine.Engine, ws workspace.Workspace, courses [
 		courses:      courses,
 		answer:       ti,
 		spinner:      sp,
+		ingInput:     ing,
+		ingDescribe:  true,
+		ingKind:      "course",
 		reduceMotion: os.Getenv("GENIUS_NO_ANIM") != "" || os.Getenv("NO_COLOR") != "",
 	}
 }
@@ -141,8 +169,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case genDoneMsg:
 		return m.genDone(msg)
 
+	case ingestDoneMsg:
+		return m.ingestDone(msg)
+
 	case spinner.TickMsg:
-		if m.state != stateSolving && m.state != stateGenerating {
+		if m.state != stateSolving && m.state != stateGenerating && m.state != stateIngesting {
 			return m, nil
 		}
 		var cmd tea.Cmd
@@ -167,7 +198,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.state = stateHome
 			return m, nil
-		case stateSolving, stateGenerating:
+		case stateIngestPick:
+			return m.updateIngestPick(msg)
+		case stateIngestOpts:
+			return m.updateIngestOpts(msg)
+		case stateChapters:
+			return m.updateChapters(msg)
+		case stateSolving, stateGenerating, stateIngesting:
 			if msg.String() == "ctrl+c" {
 				return m, tea.Quit
 			}
@@ -198,6 +235,14 @@ func (m Model) View() string {
 		body = m.viewGenerating()
 	case stateHelp:
 		body = m.viewHelp()
+	case stateIngestPick:
+		body = m.viewIngestPick()
+	case stateIngestOpts:
+		body = m.viewIngestOpts()
+	case stateIngesting:
+		body = m.viewIngesting()
+	case stateChapters:
+		body = m.viewChapters()
 	default:
 		body = m.viewHome()
 	}
@@ -242,6 +287,10 @@ func (m Model) updateHome(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startQuiz()
 	case "s":
 		return m.openExSets()
+	case "i":
+		return m.openIngest()
+	case "f":
+		return m.openChapters()
 	}
 	return m, nil
 }
@@ -256,7 +305,7 @@ func (m Model) viewStatusBar() string {
 	left := " " + m.ws.Root
 	right := "engine:" + m.engine + " "
 
-	hints := "↑/↓ move · enter/g guide · q qa · r revise · s solve · ? help · ctrl+c quit"
+	hints := "↑/↓ move · enter/g guide · q qa · r revise · s solve · i ingest · f chapters · ? help"
 	switch m.state {
 	case stateReader:
 		hints = "↑/↓ scroll · q back"
@@ -272,6 +321,14 @@ func (m Model) viewStatusBar() string {
 		hints = "generating… · ctrl+c quit"
 	case stateHelp:
 		hints = "any key to close"
+	case stateIngestPick:
+		hints = "↑/↓ move · enter open/pick · space select · ⌫ up · esc back"
+	case stateIngestOpts:
+		hints = "↑/↓ field · tab kind · enter ingest · esc back"
+	case stateIngesting:
+		hints = "ingesting… · ctrl+c quit"
+	case stateChapters:
+		hints = "↑/↓ move · space select · g guide · q q&a · esc back"
 	}
 
 	// Keep the bar to a single row: truncate hints that can't fit between the
