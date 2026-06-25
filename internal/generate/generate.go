@@ -17,6 +17,9 @@ var guidePrompt string
 //go:embed prompts/qa.txt
 var qaPrompt string
 
+//go:embed prompts/solve.txt
+var solvePrompt string
+
 // DefaultQACount is applied when the learner does not specify a count (FR-054).
 const DefaultQACount = 10
 
@@ -56,4 +59,28 @@ func QA(ctx context.Context, eng engine.Engine, course, material string, opts QA
 	fmt.Fprintf(&b, "\nCourse material:\n\n%s\n\nWrite the Q&A now, starting at `## Q1.`.", material)
 
 	return eng.Generate(ctx, qaPrompt, b.String())
+}
+
+// Solve produces worked solutions for the selected exercises, grounded only in
+// the course material (FR-104/105). It refuses before calling the engine when
+// the grounding is empty (INV-05) or nothing is selected.
+func Solve(ctx context.Context, eng engine.Engine, course, material string, exs []Exercise) (string, error) {
+	if strings.TrimSpace(material) == "" {
+		return "", fmt.Errorf("no material to ground on")
+	}
+	if len(exs) == 0 {
+		return "", fmt.Errorf("no exercises selected")
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Course: %s\n\n", course)
+	b.WriteString("Course material (your ONLY source of truth):\n\n")
+	b.WriteString(material)
+	b.WriteString("\n\n---\n\nSolve the following exercise(s) exactly as stated:\n\n")
+	for _, e := range exs {
+		fmt.Fprintf(&b, "### %s\n%s\n\n", e.Label, strings.TrimSpace(e.Text))
+	}
+	b.WriteString("Produce the worked solution(s) now.")
+
+	return eng.Generate(ctx, solvePrompt, b.String())
 }
