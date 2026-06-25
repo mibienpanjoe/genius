@@ -26,7 +26,23 @@ func newIngestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ingest <file>",
 		Short: "Convert a PDF/PPT/document to markdown in the workspace",
-		Args:  cobra.ExactArgs(1),
+		Long: "Convert a document to markdown and file it in the workspace.\n\n" +
+			"A course is a directory of markdown: genius reads EVERY .md under\n" +
+			"courses/<name>/ as grounding. The course name and the document filename\n" +
+			"are separate — --name sets the course, the file's own slug names the .md.\n" +
+			"So pointing several PDFs at one --name builds a multi-chapter course\n" +
+			"(use zero-padded names like chap01, chap02 so they sort in order).\n\n" +
+			"You can also drop your own hand-written .md straight into courses/<name>/;\n" +
+			"genius reads it the same way. Never copy a raw .pdf there — only ingested\n" +
+			"or hand-written markdown counts as grounding.",
+		Example: "  # single-file course (course name = filename slug)\n" +
+			"  genius ingest lecture.pdf\n\n" +
+			"  # multi-chapter course: many PDFs into one course, ordered\n" +
+			"  genius ingest chap01.pdf --name algebra\n" +
+			"  genius ingest chap02.pdf --name algebra\n\n" +
+			"  # exercise set filed under a course\n" +
+			"  genius ingest td1.pdf --kind exercise --course algebra",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runIngest(cmd, args[0])
 		},
@@ -124,13 +140,4 @@ func confirm(prompt string) bool {
 	line, _ := reader.ReadString('\n')
 	line = strings.ToLower(strings.TrimSpace(line))
 	return line == "y" || line == "yes"
-}
-
-// openWorkspace loads config and opens the workspace (shared by subcommands).
-func openWorkspace() (workspace.Workspace, error) {
-	cfg, err := workspace.LoadConfig()
-	if err != nil {
-		return workspace.Workspace{}, fmt.Errorf("reading config: %w", err)
-	}
-	return workspace.Open(cfg)
 }

@@ -17,8 +17,22 @@ var engineFlag string
 // TUI at the home dashboard (FR-021).
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "genius",
-		Short:         "genius — a dedicated terminal study environment",
+		Use:   "genius",
+		Short: "genius — a dedicated terminal study environment",
+		Long: "genius — a dedicated terminal study environment.\n\n" +
+			"With no subcommand it opens the TUI at the home dashboard. The subcommands\n" +
+			"script the same loop: ingest → generate → revise, all grounded strictly in\n" +
+			"your own course material under ~/study (or $GENIUS_HOME).\n\n" +
+			"Workflow:\n" +
+			"  1. ingest a lecture          genius ingest lecture.pdf\n" +
+			"  2. build a study guide       genius guide lecture\n" +
+			"  3. build revision Q&A        genius qa lecture\n" +
+			"  4. revise (quiz)             genius   → pick course → r\n\n" +
+			"Multi-chapter course (one course, many PDFs):\n" +
+			"  genius ingest chap01.pdf --name algebra\n" +
+			"  genius ingest chap02.pdf --name algebra\n" +
+			"  genius guide algebra                 # grounded on all chapters\n" +
+			"  genius guide algebra --files chap02.md   # just one chapter",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
