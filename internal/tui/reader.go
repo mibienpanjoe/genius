@@ -4,6 +4,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/mibienpanjoe/genius/internal/render"
 )
@@ -29,7 +30,8 @@ func (m Model) openReader(kind string) (tea.Model, tea.Cmd) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		m.notice = "no " + kind + " yet for " + course + " — generate it from the CLI: genius " + kind + " " + course
+		m.notice = "no " + kind + " yet for " + course
+		m.noticeLvl = lvlWarn
 		return m, nil
 	}
 
@@ -61,7 +63,11 @@ func (m Model) updateReader(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) viewReader() string {
 	title := styleTitle.Render(m.readTitle)
 	footer := styleMuted.Render(scrollLabel(m.viewport.ScrollPercent()) + " · q back")
-	return title + "\n\n" + m.viewport.View() + "\n" + footer
+	block := title + "\n\n" + m.viewport.View() + "\n" + footer
+	if m.width <= 0 {
+		return block
+	}
+	return lipgloss.Place(m.width, m.contentHeight(), lipgloss.Center, lipgloss.Top, block)
 }
 
 func scrollLabel(pct float64) string {

@@ -30,6 +30,7 @@ func (m Model) openExSets() (tea.Model, tea.Cmd) {
 	if err != nil || len(sets) == 0 {
 		m.notice = "no exercise sets for " + course +
 			" — ingest one: genius ingest <file> --kind exercise --course " + course
+		m.noticeLvl = lvlWarn
 		return m, nil
 	}
 	m.solveCourse = course
@@ -66,6 +67,7 @@ func (m Model) openExList(set string) (tea.Model, tea.Cmd) {
 	md, err := m.ws.ReadExerciseSet(m.solveCourse, set)
 	if err != nil {
 		m.notice = "could not read set " + set + ": " + err.Error()
+		m.noticeLvl = lvlErr
 		m.state = stateHome
 		return m, nil
 	}
@@ -73,6 +75,7 @@ func (m Model) openExList(set string) (tea.Model, tea.Cmd) {
 	if err != nil {
 		if !errors.Is(err, generate.ErrNoExercises) {
 			m.notice = "could not enumerate " + set + ": " + err.Error()
+			m.noticeLvl = lvlErr
 			m.state = stateHome
 			return m, nil
 		}
@@ -115,6 +118,7 @@ func (m Model) updateExList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) startSolving() (tea.Model, tea.Cmd) {
 	if m.eng == nil {
 		m.notice = "no engine available to solve"
+		m.noticeLvl = lvlWarn
 		m.state = stateHome
 		return m, nil
 	}
@@ -133,14 +137,19 @@ func (m Model) startSolving() (tea.Model, tea.Cmd) {
 	if err != nil {
 		if errors.Is(err, workspace.ErrNoMaterial) {
 			m.notice = "course " + m.solveCourse + " has no source material — ingest a document first"
+			m.noticeLvl = lvlWarn
 		} else {
 			m.notice = "grounding error: " + err.Error()
+			m.noticeLvl = lvlErr
 		}
 		m.state = stateHome
 		return m, nil
 	}
 
 	m.state = stateSolving
+	if m.reduceMotion {
+		return m, solveCmd(m.eng, m.solveCourse, material, selected)
+	}
 	return m, tea.Batch(m.spinner.Tick, solveCmd(m.eng, m.solveCourse, material, selected))
 }
 
@@ -156,6 +165,7 @@ func solveCmd(eng engine.Engine, course, material string, exs []generate.Exercis
 func (m Model) solveDone(msg solveDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.notice = "solve failed: " + msg.err.Error()
+		m.noticeLvl = lvlErr
 		m.state = stateHome
 		return m, nil
 	}
@@ -212,7 +222,7 @@ func (m Model) viewExList() string {
 }
 
 func (m Model) viewSolving() string {
-	body := m.spinner.View() + " solving " + m.solveCourse + " · " + m.solveSet +
+	body := m.spinnerHead() + "solving " + m.solveCourse + " · " + m.solveSet +
 		" with " + m.engine + "…\n\n" + styleMuted.Render("grounded only in the course material")
 	return lipgloss.NewStyle().Padding(2, 0, 0, 3).Render(body)
 }

@@ -30,12 +30,14 @@ func (m Model) startQuiz() (tea.Model, tea.Cmd) {
 	course := m.courses[m.cursor].Name
 	data, err := os.ReadFile(m.ws.QAPath(course))
 	if err != nil {
-		m.notice = "no q&a yet for " + course + " — generate it: genius qa " + course
+		m.notice = "no q&a yet for " + course + " — press q to build it"
+		m.noticeLvl = lvlWarn
 		return m, nil
 	}
 	pairs, err := quiz.Parse(string(data))
 	if err != nil {
 		m.notice = "q&a for " + course + " is unparseable: " + err.Error()
+		m.noticeLvl = lvlErr
 		return m, nil
 	}
 
@@ -140,7 +142,7 @@ func (m Model) viewQuiz() string {
 		Padding(1, 2).
 		Width(cardWidth(m.width)).
 		Render(b)
-	return card
+	return center(m.width, m.contentHeight(), card)
 }
 
 func (m Model) viewQuizSummary() string {
@@ -150,15 +152,16 @@ func (m Model) viewQuizSummary() string {
 		lipgloss.NewStyle().Foreground(cSuccess).Render("knew it: "+itoa(m.knew)) + "\n" +
 		lipgloss.NewStyle().Foreground(cError).Render("missed:  "+itoa(m.missed)) + "\n\n" +
 		styleMuted.Render("q or enter to return home")
-	return lipgloss.NewStyle().
+	card := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(cPrimary).
 		Padding(1, 2).
 		Render(body)
+	return center(m.width, m.contentHeight(), card)
 }
 
 func chipKey(key, label string, color lipgloss.Color) string {
-	return lipgloss.NewStyle().Foreground(color).Render("["+key+"] "+label)
+	return lipgloss.NewStyle().Foreground(color).Render("[" + key + "] " + label)
 }
 
 func cardWidth(termWidth int) int {

@@ -43,20 +43,26 @@ func (m Model) generateOrOpen(kind string, force bool) (tea.Model, tea.Cmd) {
 func (m Model) startGenerate(kind, course string) (tea.Model, tea.Cmd) {
 	if m.eng == nil {
 		m.notice = "no engine available to generate"
+		m.noticeLvl = lvlWarn
 		return m, nil
 	}
 	material, err := m.ws.CourseMaterial(course)
 	if err != nil {
 		if errors.Is(err, workspace.ErrNoMaterial) {
 			m.notice = "course " + course + " has no source material — ingest a document first"
+			m.noticeLvl = lvlWarn
 		} else {
 			m.notice = "grounding error: " + err.Error()
+			m.noticeLvl = lvlErr
 		}
 		return m, nil
 	}
 	m.genKind = kind
 	m.genCourse = course
 	m.state = stateGenerating
+	if m.reduceMotion {
+		return m, genCmd(m.eng, kind, course, material)
+	}
 	return m, tea.Batch(m.spinner.Tick, genCmd(m.eng, kind, course, material))
 }
 
@@ -83,6 +89,7 @@ func genCmd(eng engine.Engine, kind, course, material string) tea.Cmd {
 func (m Model) genDone(msg genDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.notice = "generate failed: " + msg.err.Error()
+		m.noticeLvl = lvlErr
 		m.state = stateHome
 		return m, nil
 	}
@@ -96,6 +103,7 @@ func (m Model) genDone(msg genDoneMsg) (tea.Model, tea.Cmd) {
 	}
 	if err := m.ws.WriteArtifact(path, []byte(msg.md+"\n"), true); err != nil {
 		m.notice = "could not write " + msg.kind + ": " + err.Error()
+		m.noticeLvl = lvlErr
 		m.state = stateHome
 		return m, nil
 	}
@@ -120,7 +128,7 @@ func (m Model) viewGenerating() string {
 	if m.genKind == "qa" {
 		what = "Q&A"
 	}
-	body := m.spinner.View() + " generating " + what + " for " + m.genCourse +
+	body := m.spinnerHead() + "generating " + what + " for " + m.genCourse +
 		" with " + m.engine + "…\n\n" + styleMuted.Render("grounded only in the course material")
 	return lipgloss.NewStyle().Padding(2, 0, 0, 3).Render(body)
 }

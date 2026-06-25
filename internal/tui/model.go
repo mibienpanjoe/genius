@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -24,6 +26,15 @@ const (
 	stateExList     // pick exercises within a set
 	stateSolving    // engine is producing the solution (spinner)
 	stateGenerating // engine is producing a guide or Q&A (spinner)
+	stateHelp       // keybinding reference overlay
+)
+
+// Notice severity levels — drive the glyph and color so meaning is never carried
+// by color alone (docs/07 §Notices).
+const (
+	lvlWarn = iota // !  pending/empty/refusal
+	lvlErr         // ✗  failures
+	lvlInfo        // i  neutral
 )
 
 // Model is the root Bubble Tea model: a home dashboard plus a reader and an
@@ -69,8 +80,12 @@ type Model struct {
 	quizDone bool
 	quizName string
 
-	// transient notice (e.g. "no guide yet")
-	notice string
+	// transient notice (e.g. "no guide yet") and its severity (lvlWarn/Err/Info)
+	notice    string
+	noticeLvl int
+
+	// reduceMotion replaces spinners with a static label (GENIUS_NO_ANIM/NO_COLOR).
+	reduceMotion bool
 }
 
 // New builds the root model from the workspace, active engine, and course list.
@@ -86,14 +101,28 @@ func New(engineName string, eng engine.Engine, ws workspace.Workspace, courses [
 	sp.Style = lipgloss.NewStyle().Foreground(cPrimary)
 
 	return Model{
-		state:   stateHome,
-		engine:  engineName,
-		eng:     eng,
-		ws:      ws,
-		courses: courses,
-		answer:  ti,
-		spinner: sp,
+		state:        stateHome,
+		engine:       engineName,
+		eng:          eng,
+		ws:           ws,
+		courses:      courses,
+		answer:       ti,
+		spinner:      sp,
+		reduceMotion: os.Getenv("GENIUS_NO_ANIM") != "" || os.Getenv("NO_COLOR") != "",
 	}
+}
+
+// noticeLine renders a transient notice with a leading glyph + semantic color so
+// meaning survives color stripping (docs/07 §Notices).
+func noticeLine(lvl int, msg string) string {
+	glyph, color := "!", cWarning
+	switch lvl {
+	case lvlErr:
+		glyph, color = "✗", cError
+	case lvlInfo:
+		glyph, color = "i", cInfo
+	}
+	return lipgloss.NewStyle().Foreground(color).Render(glyph + " " + msg)
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -132,6 +161,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateExSets(msg)
 		case stateExList:
 			return m.updateExList(msg)
+		case stateHelp:
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			m.state = stateHome
+			return m, nil
 		case stateSolving, stateGenerating:
 			if msg.String() == "ctrl+c" {
 				return m, tea.Quit
@@ -161,6 +196,8 @@ func (m Model) View() string {
 		body = m.viewSolving()
 	case stateGenerating:
 		body = m.viewGenerating()
+	case stateHelp:
+		body = m.viewHelp()
 	default:
 		body = m.viewHome()
 	}
@@ -178,9 +215,13 @@ func (m Model) View() string {
 // dashboard.
 func (m Model) updateHome(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.notice = ""
+	m.noticeLvl = lvlWarn
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
+	case "?":
+		m.state = stateHelp
+		return m, nil
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
@@ -215,7 +256,7 @@ func (m Model) viewStatusBar() string {
 	left := " " + m.ws.Root
 	right := "engine:" + m.engine + " "
 
-	hints := "g guide · q qa · r revise · s solve · G/Q regen · ctrl+c quit"
+	hints := "↑/↓ move · enter/g guide · q qa · r revise · s solve · ? help"
 	switch m.state {
 	case stateReader:
 		hints = "↑/↓ scroll · q back"
@@ -229,6 +270,8 @@ func (m Model) viewStatusBar() string {
 		hints = "solving… · ctrl+c quit"
 	case stateGenerating:
 		hints = "generating… · ctrl+c quit"
+	case stateHelp:
+		hints = "any key to close"
 	}
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right) - lipgloss.Width(hints)
@@ -244,6 +287,32 @@ func (m Model) viewStatusBar() string {
 		lipgloss.NewStyle().Width(rightPad).Render("") +
 		styleInfo.Render(right)
 	return styleStatus.Width(width).Render(row)
+}
+
+// spinnerHead returns the animated spinner glyph, or a static label under
+// reduced motion (docs/07: GENIUS_NO_ANIM/NO_COLOR).
+func (m Model) spinnerHead() string {
+	if m.reduceMotion {
+		return "working… "
+	}
+	return m.spinner.View() + " "
+}
+
+// contentHeight is the space above the one-row status bar.
+func (m Model) contentHeight() int {
+	if h := m.height - 1; h > 0 {
+		return h
+	}
+	return 0
+}
+
+// center places s in the middle of a width×height area (no-op before the first
+// WindowSizeMsg).
+func center(width, height int, s string) string {
+	if width <= 0 || height <= 0 {
+		return s
+	}
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, s)
 }
 
 func (m *Model) resizeViewport() {

@@ -194,6 +194,55 @@ func TestGenerateNoMaterialRefuses(t *testing.T) {
 	}
 }
 
+func TestFitCell(t *testing.T) {
+	if got := fitCell("ab", 5); got != "ab   " {
+		t.Errorf("short should pad to width: %q", got)
+	}
+	long := fitCell("merise-dr-ouedraogo-complet", listNameCol)
+	if n := len([]rune(long)); n != listNameCol {
+		t.Errorf("long should clamp to %d cells, got %d (%q)", listNameCol, n, long)
+	}
+	if !strings.HasSuffix(long, "…") {
+		t.Errorf("long should be ellipsized: %q", long)
+	}
+}
+
+func TestCourseDetailPanel(t *testing.T) {
+	courses := []workspace.Course{{Name: "algebra", HasGuide: true}}
+	m := New("claude", nil, workspace.Workspace{Root: "/s"}, courses)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	out := mm.View()
+
+	if !strings.Contains(out, "ALGEBRA") {
+		t.Errorf("detail panel missing course title")
+	}
+	if !strings.Contains(out, "ready") {
+		t.Errorf("guide-ready marker missing for course with a guide")
+	}
+	if !strings.Contains(out, "build q&a") {
+		t.Errorf("missing-qa build hint absent: %q", out)
+	}
+}
+
+func TestHelpOverlay(t *testing.T) {
+	courses := []workspace.Course{{Name: "algebra"}}
+	m := New("claude", nil, workspace.Workspace{Root: "/x"}, courses)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	h, _ := mm.(Model).Update(keyRunes("?"))
+	if h.(Model).state != stateHelp {
+		t.Fatalf("? should open help, state=%d", h.(Model).state)
+	}
+	if !strings.Contains(h.View(), "revise") {
+		t.Errorf("help overlay missing key reference: %q", h.View())
+	}
+
+	back, _ := h.(Model).Update(keyRunes("x"))
+	if back.(Model).state != stateHome {
+		t.Errorf("any key should close help, state=%d", back.(Model).state)
+	}
+}
+
 func TestGradientColorAtBounds(t *testing.T) {
 	if got := gradientColorAt(0); string(got) != "#6BA8F5" {
 		t.Errorf("t=0 want #6BA8F5 got %s", got)
