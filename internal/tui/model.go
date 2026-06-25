@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/mibienpanjoe/genius/internal/engine"
+	"github.com/mibienpanjoe/genius/internal/generate"
 	"github.com/mibienpanjoe/genius/internal/quiz"
 	"github.com/mibienpanjoe/genius/internal/workspace"
 )
@@ -17,6 +20,9 @@ const (
 	stateHome state = iota
 	stateReader
 	stateQuiz
+	stateExSets  // pick an exercise set for the solve flow
+	stateExList  // pick exercises within a set
+	stateSolving // engine is producing the solution (spinner)
 )
 
 // Model is the root Bubble Tea model: a home dashboard plus a reader and an
@@ -27,14 +33,25 @@ type Model struct {
 	height int
 
 	engine string
+	eng    engine.Engine
 	ws     workspace.Workspace
 
 	courses []workspace.Course
 	cursor  int
 
+	// solve flow
+	exSets      []string            // set names for the active course
+	exSetCursor int                 // cursor in the set picker
+	exItems     []generate.Exercise // enumerated exercises of the chosen set
+	exCursor    int                 // cursor in the exercise list
+	exSelected  map[int]bool        // toggled exercises (space)
+	solveCourse string              // course being solved
+	solveSet    string              // set being solved
+	spinner     spinner.Model       // shown while the engine runs
+
 	// reader
-	viewport viewport.Model
-	vpReady  bool
+	viewport  viewport.Model
+	vpReady   bool
 	readTitle string
 
 	// quiz
@@ -52,16 +69,25 @@ type Model struct {
 }
 
 // New builds the root model from the workspace, active engine, and course list.
-func New(engine string, ws workspace.Workspace, courses []workspace.Course) Model {
+// eng drives the interactive solve flow; it may be nil in contexts that never
+// solve (e.g. tests), in which case the solve action reports it.
+func New(engineName string, eng engine.Engine, ws workspace.Workspace, courses []workspace.Course) Model {
 	ti := textinput.New()
 	ti.Placeholder = "type your answer, then enter to reveal"
 	ti.CharLimit = 0
+
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(cPrimary)
+
 	return Model{
 		state:   stateHome,
-		engine:  engine,
+		engine:  engineName,
+		eng:     eng,
 		ws:      ws,
 		courses: courses,
 		answer:  ti,
+		spinner: sp,
 	}
 }
 
@@ -75,6 +101,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeViewport()
 		return m, nil
 
+	case solveDoneMsg:
+		return m.solveDone(msg)
+
+	case spinner.TickMsg:
+		if m.state != stateSolving {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
 	case tea.KeyMsg:
 		switch m.state {
 		case stateHome:
@@ -83,6 +120,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateReader(msg)
 		case stateQuiz:
 			return m.updateQuiz(msg)
+		case stateExSets:
+			return m.updateExSets(msg)
+		case stateExList:
+			return m.updateExList(msg)
+		case stateSolving:
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			return m, nil
 		}
 	}
 	return m, nil
@@ -99,6 +145,12 @@ func (m Model) View() string {
 		body = m.viewReader()
 	case stateQuiz:
 		body = m.viewQuiz()
+	case stateExSets:
+		body = m.viewExSets()
+	case stateExList:
+		body = m.viewExList()
+	case stateSolving:
+		body = m.viewSolving()
 	default:
 		body = m.viewHome()
 	}
@@ -133,6 +185,8 @@ func (m Model) updateHome(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openReader("qa")
 	case "r":
 		return m.startQuiz()
+	case "s":
+		return m.openExSets()
 	}
 	return m, nil
 }
@@ -147,12 +201,18 @@ func (m Model) viewStatusBar() string {
 	left := " " + m.ws.Root
 	right := "engine:" + m.engine + " "
 
-	hints := "g guide · q qa · r revise · ctrl+c quit"
+	hints := "g guide · q qa · r revise · s solve · ctrl+c quit"
 	switch m.state {
 	case stateReader:
 		hints = "↑/↓ scroll · q back"
 	case stateQuiz:
 		hints = "quiz · q back"
+	case stateExSets:
+		hints = "↑/↓ pick set · enter open · esc back"
+	case stateExList:
+		hints = "↑/↓ move · space select · enter solve · esc back"
+	case stateSolving:
+		hints = "solving… · ctrl+c quit"
 	}
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right) - lipgloss.Width(hints)

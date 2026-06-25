@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/mibienpanjoe/genius/internal/engine"
 	"github.com/mibienpanjoe/genius/internal/tui"
 	"github.com/mibienpanjoe/genius/internal/workspace"
 )
@@ -44,6 +45,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newIngestCmd())
 	root.AddCommand(newGuideCmd())
 	root.AddCommand(newQACmd())
+	root.AddCommand(newSolveCmd())
 	return root
 }
 
@@ -63,12 +65,16 @@ func runTUI(engineChanged bool) error {
 		return fmt.Errorf("scanning courses: %w", err)
 	}
 
-	engine := engineFlag
+	engName := engineFlag
 	if !engineChanged && cfg.DefaultEngine != "" {
-		engine = cfg.DefaultEngine
+		engName = cfg.DefaultEngine
+	}
+	eng, err := engine.New(engName, cfg.Model)
+	if err != nil {
+		return err
 	}
 
-	m := tui.New(engine, ws, courses)
+	m := tui.New(engName, eng, ws, courses)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
 	return err

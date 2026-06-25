@@ -75,7 +75,8 @@ func (m Model) viewCourseList() string {
 
 	b.WriteString("\n")
 	b.WriteString(styleMuted.Render("enter/g guide · ") + styleKey.Render("q") +
-		styleMuted.Render(" qa · ") + styleKey.Render("r") + styleMuted.Render(" revise"))
+		styleMuted.Render(" qa · ") + styleKey.Render("r") + styleMuted.Render(" revise · ") +
+		styleKey.Render("s") + styleMuted.Render(" solve"))
 
 	if m.notice != "" {
 		b.WriteString("\n\n")
