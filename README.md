@@ -4,8 +4,6 @@
 ░▀▀▀░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀▀▀
 ```
 
-# genius
-
 **A dedicated terminal study environment.** Run `genius` and you are *in a place
 built for studying* — not issuing commands inside a general-purpose shell. It
 takes your raw course material (PDF/PPT lectures) and turns it into study
