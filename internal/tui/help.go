@@ -20,7 +20,7 @@ var helpKeys = []struct {
 		{"r", "revise (quiz from q&a)"},
 		{"s", "solve exercises"},
 		{"i", "ingest a document"},
-		{"f", "scope guide/q&a to chapters"},
+		{"f", "chapter hub (per-chapter guides/q&a)"},
 	}},
 	{"ingest", [][2]string{
 		{"↑/↓", "browse · enter open dir / pick file"},
@@ -28,14 +28,19 @@ var helpKeys = []struct {
 		{"⌫", "up a directory"},
 		{"tab", "switch course / exercise kind"},
 	}},
+	{"chapters (f)", [][2]string{
+		{"space", "select chapter(s)"},
+		{"g · q", "guide / q&a for selection — open or build"},
+		{"G · Q", "force-rebuild"},
+		{"esc", "none selected = whole course · back"},
+	}},
 	{"reader", [][2]string{
 		{"↑/↓ · pgup/pgdn", "scroll"},
 		{"q · esc", "back"},
 	}},
-	{"quiz", [][2]string{
-		{"enter", "reveal answer"},
-		{"y / n", "grade: knew it / missed"},
-		{"space", "next question"},
+	{"revise", [][2]string{
+		{"r", "pick q&a: whole / chapter / all merged"},
+		{"enter", "reveal answer · y/n grade · space next"},
 		{"esc", "back"},
 	}},
 	{"solve", [][2]string{

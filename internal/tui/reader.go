@@ -28,11 +28,22 @@ func (m Model) openReader(kind string) (tea.Model, tea.Cmd) {
 		title = course + " · q&a"
 	}
 
-	data, err := os.ReadFile(path)
+	mm, cmd, err := m.openReaderPath(path, title)
 	if err != nil {
 		m.notice = "no " + kind + " yet for " + course
 		m.noticeLvl = lvlWarn
 		return m, nil
+	}
+	return mm, cmd
+}
+
+// openReaderPath loads any markdown artifact by path, renders it with Glamour,
+// and switches to the reader. It returns an error (without mutating state) when
+// the file can't be read, so callers can set their own notice.
+func (m Model) openReaderPath(path, title string) (tea.Model, tea.Cmd, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return m, nil, err
 	}
 
 	m.resizeViewport()
@@ -44,7 +55,7 @@ func (m Model) openReader(kind string) (tea.Model, tea.Cmd) {
 	m.viewport.GotoTop()
 	m.readTitle = title
 	m.state = stateReader
-	return m, nil
+	return m, nil, nil
 }
 
 func (m Model) updateReader(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

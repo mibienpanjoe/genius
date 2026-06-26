@@ -21,26 +21,122 @@ func renderAnswer(md string, width int) (string, error) {
 	return strings.TrimRight(out, "\n"), nil
 }
 
-// startQuiz loads the selected course's Q&A file, parses it, and enters the
-// quiz. A missing/unparseable file sets a home notice (ERR-061).
+// quizSource is one revisable Q&A in the picker: the whole-course Q&A, a single
+// chapter, a span, or the synthetic "all chapters merged" entry.
+type quizSource struct {
+	label  string // shown in the picker
+	path   string // file to read (empty for merged)
+	merged bool   // concatenate every non-merged source
+}
+
+// startQuiz gathers the course's Q&A sources (whole + per-chapter) and enters
+// the quiz. With a single source it loads straight in; with several it opens the
+// source picker (whole / chapter / all merged). No Q&A at all sets a home notice
+// (ERR-061).
 func (m Model) startQuiz() (tea.Model, tea.Cmd) {
 	if len(m.courses) == 0 {
 		return m, nil
 	}
 	course := m.courses[m.cursor].Name
-	data, err := os.ReadFile(m.ws.QAPath(course))
-	if err != nil {
+
+	sources := m.quizSources(course)
+	switch len(sources) {
+	case 0:
 		m.notice = "no q&a yet for " + course + " — press q to build it"
 		m.noticeLvl = lvlWarn
 		return m, nil
+	case 1:
+		return m.loadQuizSource(course, sources[0])
 	}
-	pairs, err := quiz.Parse(string(data))
+
+	m.quizPick = sources
+	m.quizPickCursor = 0
+	m.quizName = course
+	m.state = stateQuizPick
+	return m, nil
+}
+
+// quizSources lists the available Q&A for a course: the whole-course file (if
+// present) plus each scoped artifact, and an "all merged" entry when more than
+// one exists.
+func (m Model) quizSources(course string) []quizSource {
+	var sources []quizSource
+	if _, err := os.Stat(m.ws.QAPath(course)); err == nil {
+		sources = append(sources, quizSource{label: "whole course", path: m.ws.QAPath(course)})
+	}
+	scopes, _ := m.ws.QAScopes(course)
+	for _, s := range scopes {
+		sources = append(sources, quizSource{label: s, path: m.ws.ChapterQAPath(course, s)})
+	}
+	if len(sources) > 1 {
+		sources = append(sources, quizSource{label: "all chapters merged", merged: true})
+	}
+	return sources
+}
+
+// updateQuizPick drives the Q&A source picker.
+func (m Model) updateQuizPick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc", "q":
+		m.state = stateHome
+		return m, nil
+	case "up", "k":
+		if m.quizPickCursor > 0 {
+			m.quizPickCursor--
+		}
+	case "down", "j":
+		if m.quizPickCursor < len(m.quizPick)-1 {
+			m.quizPickCursor++
+		}
+	case "enter", " ":
+		return m.loadQuizSource(m.quizName, m.quizPick[m.quizPickCursor])
+	}
+	return m, nil
+}
+
+// loadQuizSource reads the chosen source (or merges all of them), parses the
+// Q&A, and enters the quiz; parse/read errors set a home notice.
+func (m Model) loadQuizSource(course string, src quizSource) (tea.Model, tea.Cmd) {
+	var md string
+	if src.merged {
+		var b strings.Builder
+		for _, s := range m.quizPick {
+			if s.merged {
+				continue
+			}
+			data, err := os.ReadFile(s.path)
+			if err != nil {
+				continue
+			}
+			b.Write(data)
+			b.WriteString("\n\n")
+		}
+		md = b.String()
+	} else {
+		data, err := os.ReadFile(src.path)
+		if err != nil {
+			m.notice = "no q&a yet for " + course + " — press q to build it"
+			m.noticeLvl = lvlWarn
+			m.state = stateHome
+			return m, nil
+		}
+		md = string(data)
+	}
+
+	pairs, err := quiz.Parse(md)
 	if err != nil {
 		m.notice = "q&a for " + course + " is unparseable: " + err.Error()
 		m.noticeLvl = lvlErr
+		m.state = stateHome
 		return m, nil
 	}
+	return m.enterQuiz(course, pairs), nil
+}
 
+// enterQuiz resets the quiz state for a fresh run over pairs.
+func (m Model) enterQuiz(course string, pairs []quiz.Pair) Model {
 	m.pairs = pairs
 	m.qIndex = 0
 	m.revealed = false
@@ -50,7 +146,29 @@ func (m Model) startQuiz() (tea.Model, tea.Cmd) {
 	m.answer.SetValue("")
 	m.answer.Focus()
 	m.state = stateQuiz
-	return m, nil
+	return m
+}
+
+// viewQuizPick lists the Q&A sources to revise.
+func (m Model) viewQuizPick() string {
+	var b strings.Builder
+	b.WriteString(styleTitle.Render(m.quizName + " · revise"))
+	b.WriteString("\n\n")
+	b.WriteString(styleMuted.Render("which q&a?"))
+	b.WriteString("\n\n")
+
+	for i, s := range m.quizPick {
+		cursor := "  "
+		label := styleBody.Render(s.label)
+		if i == m.quizPickCursor {
+			cursor = lipgloss.NewStyle().Foreground(cPrimary).Render("▌ ")
+			label = lipgloss.NewStyle().Bold(true).Foreground(cText).Render(s.label)
+		}
+		b.WriteString(cursor + label + "\n")
+	}
+
+	b.WriteString("\n" + styleMuted.Render("↑/↓ pick · enter revise · esc back"))
+	return lipgloss.NewStyle().Padding(1, 0, 0, 3).Render(b.String())
 }
 
 func (m Model) updateQuiz(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

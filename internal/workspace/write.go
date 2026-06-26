@@ -27,9 +27,20 @@ func (w Workspace) ExerciseSetPath(course, set string) string {
 	return w.Path("exercises", course, set+".md")
 }
 
-// GuidePath / QAPath are the per-course artifact locations (INV-02).
+// GuidePath / QAPath are the whole-course artifact locations (INV-02).
 func (w Workspace) GuidePath(name string) string { return w.Path("guides", name+".md") }
 func (w Workspace) QAPath(name string) string    { return w.Path("qa", name+".md") }
+
+// ChapterGuidePath / ChapterQAPath are the scoped artifact locations: a guide or
+// Q&A grounded on one chapter (or a span), filed under the course's own subdir so
+// it never overwrites the whole-course slot. scope is the joined chapter slug
+// (see scopeName in the TUI), e.g. "chap01" or "chap01+chap02".
+func (w Workspace) ChapterGuidePath(course, scope string) string {
+	return w.Path("guides", course, scope+".md")
+}
+func (w Workspace) ChapterQAPath(course, scope string) string {
+	return w.Path("qa", course, scope+".md")
+}
 
 // WriteArtifact writes data to path, creating parent dirs. It refuses to
 // overwrite an existing file unless force is true (INV-03); on refusal it

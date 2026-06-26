@@ -105,14 +105,18 @@ genius guide logic --engine codex      # swap the generation engine
 | `r` | start a revision quiz |
 | `s` | solve exercises (pick set → pick exercises) |
 | `i` | ingest a document (in-app file browser) |
-| `f` | scope a guide/Q&A to specific chapters |
+| `f` | chapter hub — per-chapter guides & Q&A |
 | `?` | keybinding help |
 | `esc` | back |
 | `ctrl+c` | quit |
 
 The TUI is self-sufficient: ingest material (`i`), generate guides/Q&A on the
-spot (`g`/`q`, or `G`/`Q` to redo), and scope a generation to chosen chapters
-(`f`) — no need to drop to the CLI. In a quiz: type your answer → `enter`
+spot (`g`/`q`, or `G`/`Q` to redo), and open the **chapter hub** (`f`) — no need
+to drop to the CLI. In the hub, `space`-select one or more chapters and `g`/`q`
+builds (or opens) a guide/Q&A scoped to just that selection, filed separately
+from the whole-course one (see [Per-chapter artifacts](#per-chapter-artifacts)).
+When a course has more than one Q&A, `r` first asks which to revise — whole,
+a single chapter, or all chapters merged. In a quiz: type your answer → `enter`
 reveals → `y`/`n` (or `space`) self-grades → advance. In solve: pick a set →
 `space` toggles exercises → `enter` solves the selection (or the highlighted
 one) and shows the worked solution in the reader.
@@ -148,6 +152,26 @@ genius guide algebra --files chap01.md,chap02.md   # a span of chapters
 
 `--files` works the same on `qa`. Without it, generation always grounds on the
 whole course.
+
+### Per-chapter artifacts
+
+The whole-course guide and Q&A always live at `guides/<course>.md` and
+`qa/<course>.md`. A **scoped** generation — one chapter or a span — is filed
+separately under the course's own subdir, so it never overwrites the
+whole-course one:
+
+```
+guides/algebra.md                 whole course
+guides/algebra/chap01.md          just chapter 1
+guides/algebra/chap01+chap02.md   a span (joined chapter slugs)
+qa/algebra/chap03.md              chapter 3 Q&A
+```
+
+In the TUI this is the **chapter hub** (`f`): `space`-select chapters, then
+`g`/`q` to build or open the scoped artifact (`G`/`Q` force-rebuild). Each
+chapter row shows whether its guide/Q&A already exists. The home `g·N q·N`
+chips count the whole-course artifact **plus** every scoped one. When several
+Q&A exist, `r` opens a picker (whole / chapter / all merged) before revising.
 
 **Topic focus vs. file scope** — two different knobs:
 

@@ -53,25 +53,30 @@ func (w Workspace) Path(parts ...string) string {
 // Course is one study subject: a directory under courses/ (INV-02), with
 // derived artifact counts for the home dashboard (FR-022).
 type Course struct {
-	Name         string
-	HasGuide     bool // guides/<name>.md exists
-	HasQA        bool // qa/<name>.md exists
-	ExerciseSets int  // count of *.md under exercises/<name>/
+	Name          string
+	HasGuide      bool // guides/<name>.md exists (whole course)
+	HasQA         bool // qa/<name>.md exists (whole course)
+	GuideChapters int  // count of *.md under guides/<name>/ (scoped guides)
+	QAChapters    int  // count of *.md under qa/<name>/ (scoped Q&A)
+	ExerciseSets  int  // count of *.md under exercises/<name>/
 }
 
-// GuideCount / QACount expose the booleans as chip counts (g·N q·N e·N).
+// GuideCount / QACount expose the artifact totals as chip counts (g·N q·N e·N):
+// the whole-course artifact (0/1) plus any per-chapter ones.
 func (c Course) GuideCount() int {
+	n := c.GuideChapters
 	if c.HasGuide {
-		return 1
+		n++
 	}
-	return 0
+	return n
 }
 
 func (c Course) QACount() int {
+	n := c.QAChapters
 	if c.HasQA {
-		return 1
+		n++
 	}
-	return 0
+	return n
 }
 
 // Courses scans courses/ and returns each course with its artifact counts,
@@ -91,10 +96,12 @@ func (w Workspace) Courses() ([]Course, error) {
 		}
 		name := e.Name()
 		courses = append(courses, Course{
-			Name:         name,
-			HasGuide:     fileExists(w.Path("guides", name+".md")),
-			HasQA:        fileExists(w.Path("qa", name+".md")),
-			ExerciseSets: countMarkdown(w.Path("exercises", name)),
+			Name:          name,
+			HasGuide:      fileExists(w.Path("guides", name+".md")),
+			HasQA:         fileExists(w.Path("qa", name+".md")),
+			GuideChapters: countMarkdown(w.Path("guides", name)),
+			QAChapters:    countMarkdown(w.Path("qa", name)),
+			ExerciseSets:  countMarkdown(w.Path("exercises", name)),
 		})
 	}
 	sort.Slice(courses, func(i, j int) bool {

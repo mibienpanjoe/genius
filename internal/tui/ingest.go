@@ -328,18 +328,7 @@ func ingestCmd(eng engine.Engine, ws workspace.Workspace, job ingestJob) tea.Cmd
 // ingestDone refreshes the course list, points the cursor at the affected
 // course, and reports a summary.
 func (m Model) ingestDone(msg ingestDoneMsg) (tea.Model, tea.Cmd) {
-	if cs, err := m.ws.Courses(); err == nil {
-		m.courses = cs
-		for i, c := range m.courses {
-			if c.Name == msg.course {
-				m.cursor = i
-				break
-			}
-		}
-		if m.cursor >= len(m.courses) {
-			m.cursor = 0
-		}
-	}
+	m.refreshCourses(msg.course)
 
 	// Nothing landed and nothing failed — every file already existed: keep the
 	// actionable overwrite hint.

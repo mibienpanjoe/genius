@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"errors"
+	"sort"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -60,11 +62,47 @@ func (m Model) startGenerate(kind, course string, files []string) (tea.Model, te
 	}
 	m.genKind = kind
 	m.genCourse = course
+	m.genPath, m.genTitle = m.resolveGenTarget(kind, course, files)
 	m.state = stateGenerating
 	if m.reduceMotion {
 		return m, genCmd(m.eng, kind, course, material)
 	}
 	return m, tea.Batch(m.spinner.Tick, genCmd(m.eng, kind, course, material))
+}
+
+// resolveGenTarget maps a generation scope to its artifact path and reader
+// title. No files — or every chapter selected — targets the whole-course slot;
+// any narrower selection targets a scoped artifact under the course subdir, so a
+// chapter guide never overwrites the whole-course one.
+func (m Model) resolveGenTarget(kind, course string, files []string) (path, title string) {
+	whole := len(files) == 0
+	if !whole {
+		if all, err := m.ws.CourseFiles(course); err == nil && len(all) > 0 && len(files) == len(all) {
+			whole = true
+		}
+	}
+	if whole {
+		if kind == "qa" {
+			return m.ws.QAPath(course), course + " · q&a"
+		}
+		return m.ws.GuidePath(course), course + " · guide"
+	}
+	scope := scopeName(files)
+	if kind == "qa" {
+		return m.ws.ChapterQAPath(course, scope), course + "/" + scope + " · q&a"
+	}
+	return m.ws.ChapterGuidePath(course, scope), course + "/" + scope + " · guide"
+}
+
+// scopeName builds the artifact basename for a set of chapter files: each file's
+// slug (sans .md), sorted, joined with "+". chap01.md,chap02.md -> "chap01+chap02".
+func scopeName(files []string) string {
+	parts := make([]string, len(files))
+	for i, f := range files {
+		parts[i] = workspace.Slug(f)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "+")
 }
 
 // courseGrounding returns the grounding blob for a generation: the whole course
@@ -94,8 +132,9 @@ func genCmd(eng engine.Engine, kind, course, material string) tea.Cmd {
 	}
 }
 
-// genDone persists the artifact (force-overwriting so regenerate works), updates
-// the course's chip count, then opens the result in the reader.
+// genDone persists the artifact at the resolved scope path (force-overwriting so
+// regenerate works), refreshes the dashboard chip counts, then opens the result
+// in the reader.
 func (m Model) genDone(msg genDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.notice = "generate failed: " + msg.err.Error()
@@ -104,32 +143,24 @@ func (m Model) genDone(msg genDoneMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var path string
-	switch msg.kind {
-	case "guide":
-		path = m.ws.GuidePath(m.genCourse)
-	case "qa":
-		path = m.ws.QAPath(m.genCourse)
-	}
-	if err := m.ws.WriteArtifact(path, []byte(msg.md+"\n"), true); err != nil {
+	if err := m.ws.WriteArtifact(m.genPath, []byte(msg.md+"\n"), true); err != nil {
 		m.notice = "could not write " + msg.kind + ": " + err.Error()
 		m.noticeLvl = lvlErr
 		m.state = stateHome
 		return m, nil
 	}
 
-	// Reflect the new artifact in the dashboard chip counts.
-	for i := range m.courses {
-		if m.courses[i].Name == m.genCourse {
-			if msg.kind == "guide" {
-				m.courses[i].HasGuide = true
-			} else {
-				m.courses[i].HasQA = true
-			}
-		}
-	}
+	// Re-scan so a new scoped artifact shows up in the chip counts immediately.
+	m.refreshCourses(m.genCourse)
 
-	return m.openReader(msg.kind)
+	mm, cmd, err := m.openReaderPath(m.genPath, m.genTitle)
+	if err != nil {
+		m.notice = "generated, but could not open: " + err.Error()
+		m.noticeLvl = lvlErr
+		m.state = stateHome
+		return m, nil
+	}
+	return mm, cmd
 }
 
 // viewGenerating mirrors viewSolving: a spinner with the grounding reassurance.

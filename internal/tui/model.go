@@ -30,7 +30,8 @@ const (
 	stateIngestPick // browse the filesystem to choose document(s)
 	stateIngestOpts // choose course/kind/flags before ingesting
 	stateIngesting  // converter is running (spinner)
-	stateChapters   // pick chapters to scope a guide/Q&A
+	stateChapters   // chapter hub: scope/open per-chapter guides & Q&A
+	stateQuizPick   // choose which Q&A (whole / chapter / merged) to revise
 )
 
 // Notice severity levels — drive the glyph and color so meaning is never carried
@@ -68,6 +69,8 @@ type Model struct {
 	// generate flow (guide / qa)
 	genKind   string // "guide" or "qa" being generated
 	genCourse string // course being generated for
+	genPath   string // resolved output path for the active generation
+	genTitle  string // reader title for the active generation
 
 	// ingest flow
 	ingDir      string          // directory currently browsed
@@ -80,11 +83,17 @@ type Model struct {
 	ingOverlay  bool            // overwrite existing targets
 	ingField    int             // active field in the options form
 
-	// chapter-scope flow (per-chapter guide/Q&A)
-	chapCourse   string       // course whose chapters are listed
-	chapFiles    []string     // chapter filenames
-	chapCursor   int          // cursor in the chapter list
-	chapSelected map[int]bool // toggled chapters
+	// chapter hub (per-chapter guide/Q&A)
+	chapCourse      string       // course whose chapters are listed
+	chapFiles       []string     // chapter filenames
+	chapCursor      int          // cursor in the chapter list
+	chapSelected    map[int]bool // toggled chapters
+	chapGuideScopes []string     // existing scope names under guides/<course>/
+	chapQAScopes    []string     // existing scope names under qa/<course>/
+
+	// quiz source picker (whole / chapter / merged)
+	quizPick       []quizSource // available Q&A sources to revise
+	quizPickCursor int          // cursor in the source picker
 
 	// reader
 	viewport  viewport.Model
@@ -204,6 +213,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateIngestOpts(msg)
 		case stateChapters:
 			return m.updateChapters(msg)
+		case stateQuizPick:
+			return m.updateQuizPick(msg)
 		case stateSolving, stateGenerating, stateIngesting:
 			if msg.String() == "ctrl+c" {
 				return m, tea.Quit
@@ -243,6 +254,8 @@ func (m Model) View() string {
 		body = m.viewIngesting()
 	case stateChapters:
 		body = m.viewChapters()
+	case stateQuizPick:
+		body = m.viewQuizPick()
 	default:
 		body = m.viewHome()
 	}
@@ -328,7 +341,9 @@ func (m Model) viewStatusBar() string {
 	case stateIngesting:
 		hints = "ingesting… · ctrl+c quit"
 	case stateChapters:
-		hints = "↑/↓ move · space select · g guide · q q&a · esc back"
+		hints = "↑/↓ move · space select · g guide · q q&a · G/Q rebuild · esc back"
+	case stateQuizPick:
+		hints = "↑/↓ pick · enter revise · esc back"
 	}
 
 	// Keep the bar to a single row: truncate hints that can't fit between the
@@ -360,6 +375,26 @@ func (m Model) spinnerHead() string {
 		return "working… "
 	}
 	return m.spinner.View() + " "
+}
+
+// refreshCourses re-scans the workspace and keeps the cursor on the named course
+// so a freshly written artifact's chip is reflected without losing the user's
+// place. A scan error leaves the current list untouched.
+func (m *Model) refreshCourses(focus string) {
+	cs, err := m.ws.Courses()
+	if err != nil {
+		return
+	}
+	m.courses = cs
+	for i, c := range m.courses {
+		if c.Name == focus {
+			m.cursor = i
+			break
+		}
+	}
+	if m.cursor >= len(m.courses) {
+		m.cursor = 0
+	}
 }
 
 // contentHeight is the space above the one-row status bar.

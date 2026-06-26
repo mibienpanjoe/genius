@@ -400,6 +400,174 @@ func TestChaptersScopedGenerate(t *testing.T) {
 	}
 }
 
+func TestScopeName(t *testing.T) {
+	if got := scopeName([]string{"chap01.md"}); got != "chap01" {
+		t.Errorf("single scope want chap01, got %q", got)
+	}
+	// unsorted input, joined and sorted
+	if got := scopeName([]string{"chap02.md", "chap01.md"}); got != "chap01+chap02" {
+		t.Errorf("combined scope want chap01+chap02, got %q", got)
+	}
+}
+
+func TestResolveGenTarget(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+	for _, f := range []string{"chap01.md", "chap02.md", "chap03.md"} {
+		mustWrite(t, ws.Path("courses", "algebra", f), "# x")
+	}
+	m := New("claude", nil, ws, nil)
+
+	// no selection → whole course
+	if p, _ := m.resolveGenTarget("guide", "algebra", nil); p != ws.GuidePath("algebra") {
+		t.Errorf("nil files should target the whole guide, got %s", p)
+	}
+	// every chapter selected → whole course
+	all := []string{"chap01.md", "chap02.md", "chap03.md"}
+	if p, _ := m.resolveGenTarget("qa", "algebra", all); p != ws.QAPath("algebra") {
+		t.Errorf("all-selected should target the whole qa, got %s", p)
+	}
+	// one chapter → scoped artifact
+	if p, _ := m.resolveGenTarget("guide", "algebra", []string{"chap01.md"}); p != ws.ChapterGuidePath("algebra", "chap01") {
+		t.Errorf("single chapter should target a scoped guide, got %s", p)
+	}
+	// a span → combined scoped artifact
+	if p, _ := m.resolveGenTarget("guide", "algebra", []string{"chap01.md", "chap02.md"}); p != ws.ChapterGuidePath("algebra", "chap01+chap02") {
+		t.Errorf("span should target a combined guide, got %s", p)
+	}
+}
+
+func TestGenDoneWritesChapterPath(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+
+	m := New("claude", nil, ws, []workspace.Course{{Name: "algebra"}})
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	gm := mm.(Model)
+	gm.genCourse = "algebra"
+	gm.genKind = "guide"
+	gm.genPath = ws.ChapterGuidePath("algebra", "chap01")
+	gm.genTitle = "algebra/chap01 · guide"
+
+	res, _ := gm.genDone(genDoneMsg{kind: "guide", md: "# scoped guide"})
+	rm := res.(Model)
+
+	if _, err := os.Stat(ws.ChapterGuidePath("algebra", "chap01")); err != nil {
+		t.Errorf("scoped guide not written: %v", err)
+	}
+	if _, err := os.Stat(ws.GuidePath("algebra")); err == nil {
+		t.Errorf("whole-course guide must be left untouched")
+	}
+	if rm.state != stateReader {
+		t.Errorf("genDone should open the reader, state=%d", rm.state)
+	}
+	if rm.courses[0].GuideCount() != 1 {
+		t.Errorf("chip count should reflect the new scoped guide, got %d", rm.courses[0].GuideCount())
+	}
+}
+
+func TestQuizSourcePicker(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+	const qa = "## Q1. What is x?\n\nThe answer.\n"
+
+	// Whole + one scoped → picker with whole / chapter / merged.
+	mustMkdir(t, ws.Path("qa", "algebra"))
+	mustWrite(t, ws.Path("qa", "algebra.md"), qa)
+	mustWrite(t, ws.Path("qa", "algebra", "chap01.md"), qa)
+
+	m := New("claude", nil, ws, []workspace.Course{{Name: "algebra"}})
+	res, _ := m.startQuiz()
+	rm := res.(Model)
+	if rm.state != stateQuizPick {
+		t.Fatalf("multiple Q&A should open the picker, state=%d", rm.state)
+	}
+	if len(rm.quizPick) != 3 {
+		t.Fatalf("want whole + chapter + merged = 3 sources, got %d (%+v)", len(rm.quizPick), rm.quizPick)
+	}
+	if !rm.quizPick[len(rm.quizPick)-1].merged {
+		t.Errorf("last source should be the merged entry")
+	}
+
+	// Selecting a source enters the quiz.
+	q, _ := rm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if q.(Model).state != stateQuiz {
+		t.Errorf("picking a source should enter the quiz, state=%d", q.(Model).state)
+	}
+}
+
+func TestQuizSingleSourceSkipsPicker(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+	// Only the whole-course Q&A exists → load straight into the quiz.
+	mustWrite(t, ws.Path("qa", "algebra.md"), "## Q1. What is x?\n\nThe answer.\n")
+
+	m := New("claude", nil, ws, []workspace.Course{{Name: "algebra"}})
+	res, _ := m.startQuiz()
+	if res.(Model).state != stateQuiz {
+		t.Errorf("a single Q&A source should skip the picker, state=%d", res.(Model).state)
+	}
+}
+
+// The chapter hub and quiz picker must render without panicking and stay within
+// the one-row-status-bar layout.
+func TestNewScreensRender(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+	mustWrite(t, ws.Path("courses", "algebra", "chap01.md"), "# A")
+	mustWrite(t, ws.Path("courses", "algebra", "chap02.md"), "# B")
+	mustMkdir(t, ws.Path("guides", "algebra"))
+	mustWrite(t, ws.Path("guides", "algebra", "chap01.md"), "# scoped")
+
+	m := New("claude", nil, ws, []workspace.Course{{Name: "algebra"}})
+	base, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	hub, _ := base.(Model).Update(keyRunes("f"))
+	if got := hub.(Model).View(); !strings.Contains(got, "chapters") {
+		t.Errorf("chapter hub should render its title, got %q", firstLine(got))
+	}
+
+	pick := base.(Model)
+	pick.state = stateQuizPick
+	pick.quizName = "algebra"
+	pick.quizPick = []quizSource{{label: "whole course"}, {label: "chap01"}, {label: "all chapters merged", merged: true}}
+	if got := pick.View(); !strings.Contains(got, "revise") {
+		t.Errorf("quiz picker should render its title, got %q", firstLine(got))
+	}
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
 func mustMkdir(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

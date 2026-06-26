@@ -220,6 +220,17 @@ shows scroll % (muted) and `q back`.
 
 ### Quiz
 Centered quiz card as specified above; status bar shows `Q i/n` and grade keys.
+When a course has more than one Q&A, `r` first shows a **source picker** (whole /
+each chapter / all merged) — a left-bar cursor list, identical idiom to the
+exercise pickers — before entering the quiz.
+
+### Chapter hub
+Reached with `f` from the home dashboard for a multi-chapter course. A
+`space`-multi-select list of the course's chapters; each row carries two badges,
+`guide ✓/—` and `qa ✓/—` (green ✓ when a scoped artifact exists, muted — when
+not — color is never the only signal). `g`/`q` build-or-open a guide/Q&A scoped
+to the selection, `G`/`Q` force-rebuild; no selection means the whole course. A
+muted `spans:` footer lists any multi-chapter (`chap01+chap02`) artifacts.
 
 ### Exercises / solve *(post-MVP)*
 Reached from the course view. A two-pane flow:

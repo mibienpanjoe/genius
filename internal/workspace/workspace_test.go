@@ -71,6 +71,59 @@ func TestCoursesScanCounts(t *testing.T) {
 	}
 }
 
+func TestChapterArtifactPaths(t *testing.T) {
+	w := Workspace{Root: "/study"}
+	if got := w.ChapterGuidePath("algebra", "chap01"); got != "/study/guides/algebra/chap01.md" {
+		t.Errorf("ChapterGuidePath wrong: %s", got)
+	}
+	if got := w.ChapterQAPath("algebra", "chap01+chap02"); got != "/study/qa/algebra/chap01+chap02.md" {
+		t.Errorf("ChapterQAPath wrong: %s", got)
+	}
+}
+
+func TestCoursesCountsChapterArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	w, err := Open(Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mustMkdir(t, w.Path("courses", "algebra"))
+	mustMkdir(t, w.Path("guides", "algebra"))
+	mustMkdir(t, w.Path("qa", "algebra"))
+	mustWrite(t, w.Path("guides", "algebra.md"), "# whole guide")        // whole
+	mustWrite(t, w.Path("guides", "algebra", "chap01.md"), "# c1")       // scoped
+	mustWrite(t, w.Path("guides", "algebra", "chap01+chap02.md"), "# s") // scoped span
+	mustWrite(t, w.Path("qa", "algebra", "chap02.md"), "## Q1. x")       // scoped qa, no whole qa
+
+	courses, err := w.Courses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := courses[0]
+	// guide: whole(1) + 2 scoped = 3
+	if c.GuideCount() != 3 {
+		t.Errorf("GuideCount want 3, got %d (%+v)", c.GuideCount(), c)
+	}
+	// qa: no whole + 1 scoped = 1
+	if c.QACount() != 1 {
+		t.Errorf("QACount want 1, got %d (%+v)", c.QACount(), c)
+	}
+	if c.HasGuide != true || c.HasQA != false {
+		t.Errorf("whole flags wrong: HasGuide=%v HasQA=%v", c.HasGuide, c.HasQA)
+	}
+
+	gs, _ := w.GuideScopes("algebra")
+	if len(gs) != 2 || gs[0] != "chap01" || gs[1] != "chap01+chap02" {
+		t.Errorf("GuideScopes wrong: %v", gs)
+	}
+	qs, _ := w.QAScopes("algebra")
+	if len(qs) != 1 || qs[0] != "chap02" {
+		t.Errorf("QAScopes wrong: %v", qs)
+	}
+}
+
 func mustMkdir(t *testing.T, p string) {
 	t.Helper()
 	if err := os.MkdirAll(p, 0o755); err != nil {

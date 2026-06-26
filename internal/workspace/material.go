@@ -96,6 +96,37 @@ func (w Workspace) CourseFiles(name string) ([]string, error) {
 	return files, nil
 }
 
+// GuideScopes / QAScopes list the scope names (filenames without .md) of the
+// per-chapter artifacts filed under guides/<course>/ and qa/<course>/, sorted. A
+// missing directory yields an empty list. These feed the chapter hub badges and
+// the quiz source picker.
+func (w Workspace) GuideScopes(course string) ([]string, error) {
+	return listScopes(w.Path("guides", course))
+}
+func (w Workspace) QAScopes(course string) ([]string, error) {
+	return listScopes(w.Path("qa", course))
+}
+
+// listScopes returns the *.md basenames (without extension) directly under dir,
+// sorted; a missing dir is not an error (empty list).
+func listScopes(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var scopes []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			scopes = append(scopes, strings.TrimSuffix(e.Name(), ".md"))
+		}
+	}
+	sort.Strings(scopes)
+	return scopes, nil
+}
+
 // MaterialFromFiles concatenates specific markdown files (relative to
 // courses/<name>/) for scoped generation (FR-055). Missing files are an error.
 func (w Workspace) MaterialFromFiles(name string, files []string) (string, error) {
