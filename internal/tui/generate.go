@@ -3,8 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"sort"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -71,38 +69,22 @@ func (m Model) startGenerate(kind, course string, files []string) (tea.Model, te
 }
 
 // resolveGenTarget maps a generation scope to its artifact path and reader
-// title. No files — or every chapter selected — targets the whole-course slot;
-// any narrower selection targets a scoped artifact under the course subdir, so a
-// chapter guide never overwrites the whole-course one.
+// title, delegating placement to the workspace so the TUI and CLI agree: no
+// files — or every chapter selected — targets the whole-course slot; any
+// narrower selection targets a scoped artifact under the course subdir.
 func (m Model) resolveGenTarget(kind, course string, files []string) (path, title string) {
-	whole := len(files) == 0
-	if !whole {
-		if all, err := m.ws.CourseFiles(course); err == nil && len(all) > 0 && len(files) == len(all) {
-			whole = true
-		}
-	}
-	if whole {
-		if kind == "qa" {
-			return m.ws.QAPath(course), course + " · q&a"
-		}
-		return m.ws.GuidePath(course), course + " · guide"
-	}
-	scope := scopeName(files)
+	label := " · guide"
+	var whole string
 	if kind == "qa" {
-		return m.ws.ChapterQAPath(course, scope), course + "/" + scope + " · q&a"
+		label = " · q&a"
+		path, whole = m.ws.QATarget(course, files), m.ws.QAPath(course)
+	} else {
+		path, whole = m.ws.GuideTarget(course, files), m.ws.GuidePath(course)
 	}
-	return m.ws.ChapterGuidePath(course, scope), course + "/" + scope + " · guide"
-}
-
-// scopeName builds the artifact basename for a set of chapter files: each file's
-// slug (sans .md), sorted, joined with "+". chap01.md,chap02.md -> "chap01+chap02".
-func scopeName(files []string) string {
-	parts := make([]string, len(files))
-	for i, f := range files {
-		parts[i] = workspace.Slug(f)
+	if path == whole {
+		return path, course + label
 	}
-	sort.Strings(parts)
-	return strings.Join(parts, "+")
+	return path, course + "/" + workspace.ScopeName(files) + label
 }
 
 // courseGrounding returns the grounding blob for a generation: the whole course

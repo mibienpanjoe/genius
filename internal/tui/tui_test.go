@@ -400,16 +400,6 @@ func TestChaptersScopedGenerate(t *testing.T) {
 	}
 }
 
-func TestScopeName(t *testing.T) {
-	if got := scopeName([]string{"chap01.md"}); got != "chap01" {
-		t.Errorf("single scope want chap01, got %q", got)
-	}
-	// unsorted input, joined and sorted
-	if got := scopeName([]string{"chap02.md", "chap01.md"}); got != "chap01+chap02" {
-		t.Errorf("combined scope want chap01+chap02, got %q", got)
-	}
-}
-
 func TestResolveGenTarget(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GENIUS_HOME", dir)

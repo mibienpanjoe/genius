@@ -19,8 +19,11 @@ func newGuideCmd() *cobra.Command {
 		Short: "Generate a study guide for a course",
 		Long: "Generate a study guide for a course.\n\n" +
 			"By default the guide is grounded on the WHOLE course — every .md under\n" +
-			"courses/<course>/ (all ingested chapters). Use --files to ground on\n" +
-			"specific chapter files instead, for a per-chapter guide.",
+			"courses/<course>/ (all ingested chapters) — and written to\n" +
+			"guides/<course>.md. Use --files to ground on specific chapter files\n" +
+			"instead; the scoped guide is filed separately at\n" +
+			"guides/<course>/<scope>.md (joined chapter slugs) so it never overwrites\n" +
+			"the whole-course one.",
 		Example: "  # whole-course guide (all chapters)\n" +
 			"  genius guide algebra\n\n" +
 			"  # guide grounded on one chapter only\n" +
@@ -48,10 +51,12 @@ func newQACmd() *cobra.Command {
 		Use:   "qa <course>",
 		Short: "Generate revision Q&A for a course",
 		Long: "Generate revision Q&A for a course.\n\n" +
-			"Grounding is the WHOLE course by default; --files narrows it to specific\n" +
-			"chapter files. --scope is different: it is a free-text focus instruction\n" +
-			"passed to the model (e.g. \"Karnaugh maps\"), not a filename — the grounding\n" +
-			"is unchanged. Combine them: --files picks the source, --scope the topic.",
+			"Grounding is the WHOLE course by default (written to qa/<course>.md);\n" +
+			"--files narrows it to specific chapter files and files the result\n" +
+			"separately at qa/<course>/<scope>.md, never overwriting the whole-course\n" +
+			"Q&A. --scope is different: it is a free-text focus instruction passed to\n" +
+			"the model (e.g. \"Karnaugh maps\"), not a filename — the grounding is\n" +
+			"unchanged. Combine them: --files picks the source, --scope the topic.",
 		Example: "  # 10 Q&A over the whole course\n" +
 			"  genius qa algebra\n\n" +
 			"  # 15 Q&A, narrowed to a topic (still grounded on whole course)\n" +
@@ -84,7 +89,7 @@ func runGuide(cmd *cobra.Command, course string) error {
 	if err != nil {
 		return err
 	}
-	path := ws.GuidePath(course)
+	path := ws.GuideTarget(course, guideFiles)
 	if err := writeWithConfirm(ws, path, []byte(out+"\n")); err != nil {
 		return err
 	}
@@ -107,7 +112,7 @@ func runQA(cmd *cobra.Command, course string) error {
 	if err != nil {
 		return err
 	}
-	path := ws.QAPath(course)
+	path := ws.QATarget(course, qaFiles)
 	if err := writeWithConfirm(ws, path, []byte(out+"\n")); err != nil {
 		return err
 	}

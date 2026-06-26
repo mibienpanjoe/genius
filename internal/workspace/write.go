@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -40,6 +41,45 @@ func (w Workspace) ChapterGuidePath(course, scope string) string {
 }
 func (w Workspace) ChapterQAPath(course, scope string) string {
 	return w.Path("qa", course, scope+".md")
+}
+
+// ScopeName builds the scoped-artifact basename from chapter filenames: each
+// file's slug (sans .md), sorted, joined with "+". chap02.md,chap01.md ->
+// "chap01+chap02".
+func ScopeName(files []string) string {
+	parts := make([]string, len(files))
+	for i, f := range files {
+		parts[i] = Slug(f)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "+")
+}
+
+// scopeIsWhole reports whether a chapter selection means the whole course: an
+// empty selection, or every chapter selected.
+func (w Workspace) scopeIsWhole(course string, files []string) bool {
+	if len(files) == 0 {
+		return true
+	}
+	all, err := w.CourseFiles(course)
+	return err == nil && len(all) > 0 && len(files) == len(all)
+}
+
+// GuideTarget / QATarget resolve where a generation should be written: the
+// whole-course slot for an empty/all selection, else a scoped artifact under the
+// course subdir. Shared by the CLI and the TUI so both agree on placement.
+func (w Workspace) GuideTarget(course string, files []string) string {
+	if w.scopeIsWhole(course, files) {
+		return w.GuidePath(course)
+	}
+	return w.ChapterGuidePath(course, ScopeName(files))
+}
+
+func (w Workspace) QATarget(course string, files []string) string {
+	if w.scopeIsWhole(course, files) {
+		return w.QAPath(course)
+	}
+	return w.ChapterQAPath(course, ScopeName(files))
 }
 
 // WriteArtifact writes data to path, creating parent dirs. It refuses to

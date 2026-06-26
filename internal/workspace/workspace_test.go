@@ -124,6 +124,45 @@ func TestCoursesCountsChapterArtifacts(t *testing.T) {
 	}
 }
 
+func TestScopeName(t *testing.T) {
+	if got := ScopeName([]string{"chap01.md"}); got != "chap01" {
+		t.Errorf("single scope want chap01, got %q", got)
+	}
+	// unsorted input is sorted and joined
+	if got := ScopeName([]string{"chap02.md", "chap01.md"}); got != "chap01+chap02" {
+		t.Errorf("combined scope want chap01+chap02, got %q", got)
+	}
+}
+
+func TestGuideQATarget(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	w, err := Open(Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, w.Path("courses", "algebra"))
+	for _, f := range []string{"chap01.md", "chap02.md", "chap03.md"} {
+		mustWrite(t, w.Path("courses", "algebra", f), "# x")
+	}
+
+	// no files / all files → whole-course slot
+	if got := w.GuideTarget("algebra", nil); got != w.GuidePath("algebra") {
+		t.Errorf("nil files should target the whole guide, got %s", got)
+	}
+	all := []string{"chap01.md", "chap02.md", "chap03.md"}
+	if got := w.QATarget("algebra", all); got != w.QAPath("algebra") {
+		t.Errorf("all-selected should target the whole qa, got %s", got)
+	}
+	// subset → scoped artifact
+	if got := w.GuideTarget("algebra", []string{"chap01.md"}); got != w.ChapterGuidePath("algebra", "chap01") {
+		t.Errorf("single chapter should target a scoped guide, got %s", got)
+	}
+	if got := w.QATarget("algebra", []string{"chap01.md", "chap02.md"}); got != w.ChapterQAPath("algebra", "chap01+chap02") {
+		t.Errorf("span should target a combined qa, got %s", got)
+	}
+}
+
 func mustMkdir(t *testing.T, p string) {
 	t.Helper()
 	if err := os.MkdirAll(p, 0o755); err != nil {

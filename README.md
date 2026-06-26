@@ -145,13 +145,15 @@ genius ingest chap01.pdf --name algebra      # → courses/algebra/chap01.md
 genius ingest chap02.pdf --name algebra      # → courses/algebra/chap02.md
 genius ingest chap03.pdf --name algebra
 
-genius guide algebra                         # grounded on ALL chapters
-genius guide algebra --files chap03.md       # grounded on one chapter
-genius guide algebra --files chap01.md,chap02.md   # a span of chapters
+genius guide algebra                         # → guides/algebra.md (ALL chapters)
+genius guide algebra --files chap03.md       # → guides/algebra/chap03.md
+genius guide algebra --files chap01.md,chap02.md   # → guides/algebra/chap01+chap02.md
 ```
 
-`--files` works the same on `qa`. Without it, generation always grounds on the
-whole course.
+`--files` works the same on `qa`. A scoped run is filed separately under the
+course subdir (see [Per-chapter artifacts](#per-chapter-artifacts)) and never
+overwrites the whole-course artifact. Without `--files`, generation grounds on —
+and writes — the whole course.
 
 ### Per-chapter artifacts
 
