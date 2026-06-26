@@ -4,4 +4,4 @@
 
 # Personal/copyrighted course material — fixtures only, kept out of history.
 # Tests reference these and skip gracefully when absent.
-/samples/*.pdf
+/samples
