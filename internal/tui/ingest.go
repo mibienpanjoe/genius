@@ -46,12 +46,14 @@ type ingestJob struct {
 	opts      convert.IngestOpts
 }
 
-// ingestDoneMsg reports a finished batch back to the UI thread.
+// ingestDoneMsg reports a finished batch back to the UI thread. errs holds one
+// "<file>: <reason>" entry per failed document, so a partial failure surfaces
+// every casualty without hiding the files that did land.
 type ingestDoneMsg struct {
 	course   string
 	ingested int
 	skipped  int
-	firstErr string
+	errs     []string
 }
 
 // openIngest enters the file browser, refusing up front when the converter is
@@ -285,7 +287,7 @@ func (m Model) runIngest() (tea.Model, tea.Cmd) {
 func ingestCmd(eng engine.Engine, ws workspace.Workspace, job ingestJob) tea.Cmd {
 	return func() tea.Msg {
 		var ingested, skipped int
-		var firstErr string
+		var errs []string
 		course := job.target
 
 		for _, f := range job.files {
@@ -306,9 +308,7 @@ func ingestCmd(eng engine.Engine, ws workspace.Workspace, job ingestJob) tea.Cmd
 
 			res, err := convert.Ingest(context.Background(), f, assets, eng, job.opts)
 			if err != nil {
-				if firstErr == "" {
-					firstErr = err.Error()
-				}
+				errs = append(errs, filepath.Base(f)+": "+err.Error())
 				continue
 			}
 			werr := ws.WriteArtifact(target, []byte(res.Markdown+"\n"), job.overwrite)
@@ -316,14 +316,12 @@ func ingestCmd(eng engine.Engine, ws workspace.Workspace, job ingestJob) tea.Cmd
 			case errors.Is(werr, workspace.ErrExists):
 				skipped++
 			case werr != nil:
-				if firstErr == "" {
-					firstErr = werr.Error()
-				}
+				errs = append(errs, filepath.Base(f)+": "+werr.Error())
 			default:
 				ingested++
 			}
 		}
-		return ingestDoneMsg{course: course, ingested: ingested, skipped: skipped, firstErr: firstErr}
+		return ingestDoneMsg{course: course, ingested: ingested, skipped: skipped, errs: errs}
 	}
 }
 
@@ -343,23 +341,53 @@ func (m Model) ingestDone(msg ingestDoneMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	switch {
-	case msg.firstErr != "":
-		m.notice = "ingest: " + msg.firstErr
-		m.noticeLvl = lvlErr
-	case msg.ingested == 0 && msg.skipped > 0:
-		m.notice = fmt.Sprintf("nothing ingested — %d already existed (toggle overwrite to replace)", msg.skipped)
+	// Nothing landed and nothing failed — every file already existed: keep the
+	// actionable overwrite hint.
+	if msg.ingested == 0 && len(msg.errs) == 0 && msg.skipped > 0 {
+		m.notice = fmt.Sprintf("nothing new — %d already existed (toggle overwrite to replace)", msg.skipped)
 		m.noticeLvl = lvlWarn
-	default:
-		summary := fmt.Sprintf("ingested %d file(s) into %s", msg.ingested, msg.course)
-		if msg.skipped > 0 {
-			summary += fmt.Sprintf(" · %d skipped (exists)", msg.skipped)
-		}
-		m.notice = summary
-		m.noticeLvl = lvlInfo
+		m.state = stateHome
+		return m, nil
 	}
+
+	// Build a summary that always reports what succeeded, then what failed, so a
+	// partial batch never hides its wins behind one error.
+	var parts []string
+	if msg.ingested > 0 {
+		parts = append(parts, fmt.Sprintf("ingested %d file(s) into %s", msg.ingested, msg.course))
+	}
+	if msg.skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped (exists)", msg.skipped))
+	}
+	if n := len(msg.errs); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed: %s", n, joinErrs(msg.errs, 2)))
+	}
+
+	switch {
+	case len(msg.errs) == 0:
+		m.noticeLvl = lvlInfo // clean run
+	case msg.ingested == 0 && msg.skipped == 0:
+		m.noticeLvl = lvlErr // total failure
+	default:
+		m.noticeLvl = lvlWarn // partial — some landed, some failed
+	}
+
+	if len(parts) == 0 {
+		parts = append(parts, "nothing ingested")
+		m.noticeLvl = lvlWarn
+	}
+	m.notice = strings.Join(parts, " · ")
 	m.state = stateHome
 	return m, nil
+}
+
+// joinErrs renders failure reasons compactly: the first max in full, then a
+// "(+N more)" tail so a big broken batch stays one readable line.
+func joinErrs(errs []string, max int) string {
+	if len(errs) <= max {
+		return strings.Join(errs, " · ")
+	}
+	return strings.Join(errs[:max], " · ") + fmt.Sprintf(" · (+%d more)", len(errs)-max)
 }
 
 func (m Model) viewIngestPick() string {

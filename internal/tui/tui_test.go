@@ -331,6 +331,39 @@ func TestIngestDoneRefresh(t *testing.T) {
 	}
 }
 
+// A partial batch must report the files that landed AND every failure — an error
+// on one document used to mask the successes entirely.
+func TestIngestDonePartialFailure(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, ws.Path("courses", "algebra"))
+
+	m := New("claude", nil, ws, nil)
+	res, _ := m.ingestDone(ingestDoneMsg{
+		course:   "algebra",
+		ingested: 2,
+		errs:     []string{"chap3.pdf: boom", "chap4.pdf: kaput"},
+	})
+	rm := res.(Model)
+
+	if !strings.Contains(rm.notice, "ingested 2") {
+		t.Errorf("partial batch must still report successes, got %q", rm.notice)
+	}
+	if !strings.Contains(rm.notice, "2 failed") {
+		t.Errorf("partial batch must report the failure count, got %q", rm.notice)
+	}
+	if !strings.Contains(rm.notice, "chap3.pdf") {
+		t.Errorf("partial batch must name a failed file, got %q", rm.notice)
+	}
+	if rm.noticeLvl != lvlWarn {
+		t.Errorf("partial failure should warn (lvlWarn=%d), got %d", lvlWarn, rm.noticeLvl)
+	}
+}
+
 func TestChaptersScopedGenerate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GENIUS_HOME", dir)
