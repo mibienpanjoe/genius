@@ -9,11 +9,10 @@ import (
 // Palette — tokens from docs/07_visual_identity.md. Truecolor hex; Lip Gloss
 // degrades to 256/16-color automatically. NO_COLOR is honored by Lip Gloss.
 var (
-	cPrimary    = lipgloss.Color("#7C6FF0") // Genius Violet
-	cPrimaryDim = lipgloss.Color("#5B50C2") // Violet Dim
-	cSurface    = lipgloss.Color("#1A1A24") // Panel
-	cText       = lipgloss.Color("#E6E6F0") // Paper
-	cTextMuted  = lipgloss.Color("#8A8AA0") // Slate
+	cPrimary   = lipgloss.Color("#7C6FF0") // Genius Violet
+	cSurface   = lipgloss.Color("#1A1A24") // Panel
+	cText      = lipgloss.Color("#E6E6F0") // Paper
+	cTextMuted = lipgloss.Color("#8A8AA0") // Slate
 
 	cSuccess = lipgloss.Color("#3FB950")
 	cWarning = lipgloss.Color("#D6A33E")
