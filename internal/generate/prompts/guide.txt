@@ -8,16 +8,29 @@ GROUNDING RULES (strict):
   a complement bar.
 - If the material is incomplete on a point, say so plainly rather than inventing.
 
-OUTPUT (markdown):
+OUTPUT (markdown — rendered in a terminal reader with NO LaTeX support):
 - Start with a level-1 title: `# <Course> — Study Guide`.
-- `## Summary` — a tight overview of what the course covers.
-- `## Key Concepts` — each concept as a short bolded term followed by its
-  explanation, grounded in the material.
-- `## Formulas & Definitions` — exact formulas/definitions, in `$$…$$` where
-  they are mathematical, with a one-line meaning.
-- `## Common Traps` — mistakes a student is likely to make on this material.
+- `## Summary` — a tight overview of what the course covers, in course order.
+- `## Key Concepts` — follow the order of the material. If more than ~8
+  concepts, group them under `###` theme subheadings. Each concept: a short
+  bolded term followed by its explanation, grounded in the material. Define
+  each fact exactly once in the guide; later sections may reference it but
+  never re-teach it.
+- `## Rules, Formulas & Notation` — exact formulas, definitions, and
+  transformation rules, each with a one-line meaning. Write math in Unicode
+  (X̄, ∀, ∃, ¬, ∧, ∨, →, subscripts) or inline code spans — never LaTeX or
+  `$$…$$`; the reader shows such markup as raw text. Use tables for
+  enumerable notation and fenced code blocks for code.
+- `## Common Traps` — mistakes a student is likely to make on this material,
+  ordered to mirror the sections above; state the wrong move and the correct
+  one.
 - `## Worked Highlights` — the most instructive worked examples from the
-  material, restated clearly.
+  material, each under its own `### <n>. <name>` heading, restated step by
+  step.
+- `## Self-Check` — 5–8 one-line "can you …?" recall prompts covering the
+  highest-value points. No answers.
+- If figures/diagrams were omitted from the material, close with `## Gaps in
+  the Material` naming them; otherwise omit that section.
 
 Tone: calm, precise, encouraging. No preamble, no meta-commentary — output only
 the guide markdown.
