@@ -59,7 +59,7 @@ func Ingest(ctx context.Context, path, assetsDir string, eng engine.Engine, opts
 	if isPDF && imagesAvailable() {
 		imgs, ierr := extractImages(ctx, path, assetsDir, minPx)
 		if ierr == nil && len(imgs) > 0 {
-			section, paths := figureSection(ctx, imgs, assetsDir, eng, opts.Describe)
+			section, paths := figureSection(ctx, imgs, eng, opts.Describe)
 			md += "\n\n" + section
 			assets = paths
 		}
@@ -87,7 +87,7 @@ func Ingest(ctx context.Context, path, assetsDir string, eng engine.Engine, opts
 // figureSection builds the "Extracted Figures" markdown and returns it with the
 // list of asset paths. Each figure gets a provenance-marked blockquote
 // (FR-035b/c, INV-12): a model caption when describable, else a placeholder.
-func figureSection(ctx context.Context, imgs []ExtractedImage, assetsDir string, eng engine.Engine, describe bool) (string, []string) {
+func figureSection(ctx context.Context, imgs []ExtractedImage, eng engine.Engine, describe bool) (string, []string) {
 	var b strings.Builder
 	b.WriteString("## Extracted Figures\n")
 	b.WriteString("_Model transcriptions of figures pulled from the source. " +
@@ -95,7 +95,7 @@ func figureSection(ctx context.Context, imgs []ExtractedImage, assetsDir string,
 
 	var paths []string
 	for i, im := range imgs {
-		rel := relAsset(assetsDir, im.Path)
+		rel := relAsset(im.Path)
 		paths = append(paths, im.Path)
 
 		caption := ""
@@ -117,7 +117,7 @@ func figureSection(ctx context.Context, imgs []ExtractedImage, assetsDir string,
 	return b.String(), paths
 }
 
-func relAsset(assetsDir, p string) string {
+func relAsset(p string) string {
 	return "assets/" + filepath.Base(p)
 }
 
@@ -170,7 +170,7 @@ func escalateNotation(ctx context.Context, pdf, assetsDir string, eng engine.Eng
 			continue
 		}
 		fmt.Fprintf(&b, "### Page %d (transcribed from %s)\n\n%s\n\n",
-			i+1, relAsset(assetsDir, p), strings.TrimSpace(out))
+			i+1, relAsset(p), strings.TrimSpace(out))
 		got++
 	}
 	if got == 0 {

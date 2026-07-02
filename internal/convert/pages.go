@@ -1,14 +1,12 @@
 package convert
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -17,27 +15,6 @@ import (
 func pagesAvailable() bool {
 	_, err := exec.LookPath("pdftoppm")
 	return err == nil
-}
-
-// pageCount returns the number of pages in a PDF via `pdfinfo`. A zero count
-// with a nil error means pdfinfo ran but reported no "Pages:" line.
-func pageCount(ctx context.Context, pdf string) (int, error) {
-	if _, err := exec.LookPath("pdfinfo"); err != nil {
-		return 0, fmt.Errorf("pdfinfo (poppler) not found")
-	}
-	out, err := exec.CommandContext(ctx, "pdfinfo", pdf).Output()
-	if err != nil {
-		return 0, fmt.Errorf("pdfinfo: %w", err)
-	}
-	sc := bufio.NewScanner(strings.NewReader(string(out)))
-	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		if len(fields) == 2 && fields[0] == "Pages:" {
-			n, _ := strconv.Atoi(fields[1])
-			return n, nil
-		}
-	}
-	return 0, nil
 }
 
 // renderPages rasterizes every page of a PDF to PNGs in dir and returns the

@@ -29,7 +29,7 @@ func TestNotationWarning(t *testing.T) {
 func TestFigureSectionPlaceholderOnNoVision(t *testing.T) {
 	f := &engine.Fake{DescribeErr: engine.ErrNoVision}
 	imgs := []ExtractedImage{{Path: "/w/assets/img-000.png", Page: 6, W: 148, H: 430}}
-	section, paths := figureSection(context.Background(), imgs, "/w/assets", f, true)
+	section, paths := figureSection(context.Background(), imgs, f, true)
 
 	if len(paths) != 1 {
 		t.Fatalf("want 1 asset path, got %d", len(paths))
@@ -81,7 +81,7 @@ func TestEscalateNotationAssembly(t *testing.T) {
 func TestFigureSectionCaption(t *testing.T) {
 	f := &engine.Fake{DescribeReply: "A two-input AND gate with output Q = A∧B."}
 	imgs := []ExtractedImage{{Path: "/w/assets/img-000.png", Page: 2, W: 300, H: 200}}
-	section, _ := figureSection(context.Background(), imgs, "/w/assets", f, true)
+	section, _ := figureSection(context.Background(), imgs, f, true)
 
 	if !strings.Contains(section, "AND gate") {
 		t.Errorf("caption not inserted: %s", section)
