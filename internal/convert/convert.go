@@ -16,7 +16,7 @@ import (
 var ErrNotInstalled = errors.New("markitdown not found")
 
 // InstallHint is the actionable remedy shown when the Converter is absent.
-const InstallHint = "markitdown not found — run: pip install markitdown"
+const InstallHint = "markitdown not found — run: pip install 'markitdown[all]'"
 
 // Available reports whether the markitdown CLI is on PATH.
 func Available() bool {

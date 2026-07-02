@@ -56,7 +56,7 @@ Convert a document to markdown and file it.
 - **Errors:**
   | Exit | Condition |
   |------|-----------|
-  | 1 | `markitdown` not installed (ERR-031) — message includes `pip install markitdown` |
+  | 1 | `markitdown` not installed (ERR-031) — message includes `pip install 'markitdown[all]'` |
   | 1 | File missing/unsupported (ERR-032) |
   | 1 | Output exists and overwrite declined (ERR-034) |
 
