@@ -107,7 +107,7 @@ genius guide logic --engine codex      # swap the generation engine
 | `i` | ingest a document (in-app file browser) |
 | `f` | chapter hub — per-chapter guides & Q&A |
 | `?` | keybinding help |
-| `esc` | back |
+| `esc` | back — or cancel a running generation / solve / ingest |
 | `ctrl+c` | quit |
 
 The TUI is self-sufficient: ingest material (`i`), generate guides/Q&A on the
@@ -115,6 +115,11 @@ spot (`g`/`q`, or `G`/`Q` to redo), and open the **chapter hub** (`f`) — no ne
 to drop to the CLI. In the hub, `space`-select one or more chapters and `g`/`q`
 builds (or opens) a guide/Q&A scoped to just that selection, filed separately
 from the whole-course one (see [Per-chapter artifacts](#per-chapter-artifacts)).
+Generating Q&A (whole-course or scoped) first asks how many pairs to make —
+`enter` accepts the default. While a generation, solve, or ingest is running the
+spinner names the exact scope being built, `esc` cancels it and drops you back
+where you were, and `ctrl+c` quits genius; closing the reader afterwards returns
+you to the screen you opened it from.
 When a course has more than one Q&A, `r` first asks which to revise — whole,
 a single chapter, or all chapters merged. In a quiz: type your answer → `enter`
 reveals → `y`/`n` (or `space`) self-grades → advance. In solve: pick a set →
@@ -259,8 +264,9 @@ docs/                   01–07 design docs (PRD, SRS, architecture, …)
 
 Ingest, guide, qa, reader, quiz, and exercise solving (`solve`) all work
 end-to-end against real material, in both the CLI and the TUI — including
-in-app ingest, generation, and per-chapter scoping (v0.2.0). Post-MVP: quiz
-weak-spot tracking.
+in-app ingest, generation, and per-chapter scoping (v0.2.0). v0.3.0 adds a Q&A
+count prompt, a scope-aware generating spinner, origin-aware reader back, and
+`esc`-cancelable generation. Post-MVP: quiz weak-spot tracking.
 
 ## Contributing
 
