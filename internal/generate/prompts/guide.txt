@@ -12,15 +12,19 @@ OUTPUT (markdown — rendered in a terminal reader with NO LaTeX support):
 - Start with a level-1 title: `# <Course> — Study Guide`.
 - `## Summary` — a tight overview of what the course covers, in course order.
 - `## Key Concepts` — follow the order of the material. If more than ~8
-  concepts, group them under `###` theme subheadings. Each concept: a short
-  bolded term followed by its explanation, grounded in the material. Define
-  each fact exactly once in the guide; later sections may reference it but
-  never re-teach it.
+  concepts, group them under `###` theme subheadings. Write each concept as
+  its own block — a short bolded term, an em dash (—), then its explanation —
+  and separate consecutive concepts with a BLANK LINE so they breathe. Do NOT
+  pack them into a bullet list; the reader collapses list items together.
+  Define each fact exactly once in the guide; later sections may reference it
+  but never re-teach it.
 - `## Rules, Formulas & Notation` — exact formulas, definitions, and
-  transformation rules, each with a one-line meaning. Write math in Unicode
-  (X̄, ∀, ∃, ¬, ∧, ∨, →, subscripts) or inline code spans — never LaTeX or
-  `$$…$$`; the reader shows such markup as raw text. Use tables for
-  enumerable notation and fenced code blocks for code.
+  transformation rules, each with a one-line meaning. Give each rule its own
+  block separated by a BLANK LINE (a bolded name/formula, an em dash, its
+  meaning) rather than a tight bullet list. Write math in Unicode (X̄, ∀, ∃,
+  ¬, ∧, ∨, →, subscripts) or inline code spans — never LaTeX or `$$…$$`; the
+  reader shows such markup as raw text. Use tables for enumerable notation and
+  fenced code blocks for code.
 - `## Common Traps` — mistakes a student is likely to make on this material,
   ordered to mirror the sections above; state the wrong move and the correct
   one.
