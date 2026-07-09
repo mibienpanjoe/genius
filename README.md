@@ -10,6 +10,12 @@ takes your raw course material (PDF/PPT lectures) and turns it into study
 guides, revision Q&A, and interactive quizzes, all inside one cohesive,
 gradient-styled terminal UI.
 
+![genius in action — home dashboard, study guide, quiz, chapter hub](demo/genius.gif)
+
+> The clip runs against a small synthetic workspace ([`demo/`](demo/)); opening a
+> guide or quiz just reads what's on disk, so no generation engine is invoked.
+> Rebuild it with `vhs demo/demo.tape`.
+
 ---
 
 ## Why
