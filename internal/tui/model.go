@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -32,6 +33,7 @@ const (
 	stateIngesting  // converter is running (spinner)
 	stateChapters   // chapter hub: scope/open per-chapter guides & Q&A
 	stateQuizPick   // choose which Q&A (whole / chapter / merged) to revise
+	stateQACount    // enter the Q&A pair count before generating
 )
 
 // Notice severity levels — drive the glyph and color so meaning is never carried
@@ -69,8 +71,23 @@ type Model struct {
 	// generate flow (guide / qa)
 	genKind   string // "guide" or "qa" being generated
 	genCourse string // course being generated for
+	genScope  string // grounding scope for the spinner (course, or course/chapter)
+	genCount  int    // Q&A pair count for the active generation (<=0 = default)
 	genPath   string // resolved output path for the active generation
 	genTitle  string // reader title for the active generation
+
+	// Q&A count prompt (shown before generating Q&A)
+	qaInput  textinput.Model // count entry
+	qaCourse string          // course pending Q&A generation
+	qaFiles  []string        // chapter scope pending Q&A generation
+
+	// back is the screen a reader / count prompt returns to (zero = home).
+	back state
+
+	// cancel aborts the in-flight spinner op (engine/converter); workEpoch tags
+	// each async op so a result that arrives after a cancel is discarded.
+	cancel    context.CancelFunc
+	workEpoch int
 
 	// ingest flow
 	ingDir      string          // directory currently browsed
@@ -134,6 +151,11 @@ func New(engineName string, eng engine.Engine, ws workspace.Workspace, courses [
 	ing.Placeholder = "course name"
 	ing.CharLimit = 64
 
+	qa := textinput.New()
+	qa.Placeholder = "10"
+	qa.CharLimit = 4
+	qa.Validate = digitsOnly
+
 	return Model{
 		state:        stateHome,
 		engine:       engineName,
@@ -143,6 +165,7 @@ func New(engineName string, eng engine.Engine, ws workspace.Workspace, courses [
 		answer:       ti,
 		spinner:      sp,
 		ingInput:     ing,
+		qaInput:      qa,
 		ingDescribe:  true,
 		ingKind:      "course",
 		reduceMotion: os.Getenv("GENIUS_NO_ANIM") != "" || os.Getenv("NO_COLOR") != "",
@@ -215,9 +238,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateChapters(msg)
 		case stateQuizPick:
 			return m.updateQuizPick(msg)
+		case stateQACount:
+			return m.updateQACount(msg)
 		case stateSolving, stateGenerating, stateIngesting:
-			if msg.String() == "ctrl+c" {
+			// esc aborts the running op and drops back into genius; ctrl+c stays
+			// the hard-quit everywhere.
+			switch msg.String() {
+			case "ctrl+c":
 				return m, tea.Quit
+			case "esc":
+				return m.cancelWork()
 			}
 			return m, nil
 		}
@@ -256,6 +286,8 @@ func (m Model) View() string {
 		body = m.viewChapters()
 	case stateQuizPick:
 		body = m.viewQuizPick()
+	case stateQACount:
+		body = m.viewQACount()
 	default:
 		body = m.viewHome()
 	}
@@ -329,9 +361,9 @@ func (m Model) viewStatusBar() string {
 	case stateExList:
 		hints = "↑/↓ move · space select · enter solve · esc back"
 	case stateSolving:
-		hints = "solving… · ctrl+c quit"
+		hints = "solving… · esc cancel · ctrl+c quit"
 	case stateGenerating:
-		hints = "generating… · ctrl+c quit"
+		hints = "generating… · esc cancel · ctrl+c quit"
 	case stateHelp:
 		hints = "any key to close"
 	case stateIngestPick:
@@ -339,11 +371,13 @@ func (m Model) viewStatusBar() string {
 	case stateIngestOpts:
 		hints = "↑/↓ field · tab kind · enter ingest · esc back"
 	case stateIngesting:
-		hints = "ingesting… · ctrl+c quit"
+		hints = "ingesting… · esc cancel · ctrl+c quit"
 	case stateChapters:
 		hints = "↑/↓ move · space select · g guide · q q&a · G/Q rebuild · esc back"
 	case stateQuizPick:
 		hints = "↑/↓ pick · enter revise · esc back"
+	case stateQACount:
+		hints = "type count · enter generate · esc back"
 	}
 
 	// Keep the bar to a single row: truncate hints that can't fit between the
@@ -366,6 +400,34 @@ func (m Model) viewStatusBar() string {
 		lipgloss.NewStyle().Width(rightPad).Render("") +
 		styleInfo.Render(right)
 	return styleStatus.Width(width).Render(row)
+}
+
+// beginWork sets up a cancellable context for a spinner op (solve/generate/
+// ingest) and bumps the epoch so any earlier op's late result is ignored once
+// this one starts. Callers store the returned epoch on the outgoing msg.
+func (m *Model) beginWork() (context.Context, int) {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	m.workEpoch++
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	return ctx, m.workEpoch
+}
+
+// cancelWork aborts the running spinner op and drops back to the screen it was
+// launched from, bumping the epoch so the abandoned result is discarded when it
+// eventually arrives.
+func (m Model) cancelWork() (tea.Model, tea.Cmd) {
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+	m.workEpoch++
+	m.notice = "cancelled"
+	m.noticeLvl = lvlInfo
+	m.state = m.back
+	return m, nil
 }
 
 // spinnerHead returns the animated spinner glyph, or a static label under

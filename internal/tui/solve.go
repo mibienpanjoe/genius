@@ -15,8 +15,9 @@ import (
 
 // solveDoneMsg carries the engine's worked solution back to the UI thread.
 type solveDoneMsg struct {
-	md  string
-	err error
+	md    string
+	err   error
+	epoch int // the work epoch this result belongs to (stale results ignored)
 }
 
 // openExSets enters the solve flow for the highlighted course by listing its
@@ -146,23 +147,29 @@ func (m Model) startSolving() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	m.back = stateExList
 	m.state = stateSolving
+	ctx, epoch := m.beginWork()
 	if m.reduceMotion {
-		return m, solveCmd(m.eng, m.solveCourse, material, selected)
+		return m, solveCmd(ctx, m.eng, m.solveCourse, material, selected, epoch)
 	}
-	return m, tea.Batch(m.spinner.Tick, solveCmd(m.eng, m.solveCourse, material, selected))
+	return m, tea.Batch(m.spinner.Tick, solveCmd(ctx, m.eng, m.solveCourse, material, selected, epoch))
 }
 
 // solveCmd runs generate.Solve off the UI goroutine and reports the result.
-func solveCmd(eng engine.Engine, course, material string, exs []generate.Exercise) tea.Cmd {
+func solveCmd(ctx context.Context, eng engine.Engine, course, material string, exs []generate.Exercise, epoch int) tea.Cmd {
 	return func() tea.Msg {
-		md, err := generate.Solve(context.Background(), eng, course, material, exs)
-		return solveDoneMsg{md: md, err: err}
+		md, err := generate.Solve(ctx, eng, course, material, exs)
+		return solveDoneMsg{md: md, err: err, epoch: epoch}
 	}
 }
 
 // solveDone renders the worked solution into the reader, or surfaces an error.
 func (m Model) solveDone(msg solveDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.epoch != m.workEpoch {
+		return m, nil // superseded or cancelled — ignore this result
+	}
+	m.cancel = nil
 	if msg.err != nil {
 		m.notice = "solve failed: " + msg.err.Error()
 		m.noticeLvl = lvlErr
@@ -177,6 +184,7 @@ func (m Model) solveDone(msg solveDoneMsg) (tea.Model, tea.Cmd) {
 	m.viewport.SetContent(out)
 	m.viewport.GotoTop()
 	m.readTitle = m.solveCourse + " · " + m.solveSet + " · solution"
+	m.back = stateHome
 	m.state = stateReader
 	return m, nil
 }

@@ -61,7 +61,7 @@ func (m Model) openReaderPath(path, title string) (tea.Model, tea.Cmd, error) {
 func (m Model) updateReader(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
-		m.state = stateHome
+		m.state = m.back
 		return m, nil
 	case "ctrl+c":
 		return m, tea.Quit

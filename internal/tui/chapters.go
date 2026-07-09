@@ -78,6 +78,7 @@ func (m Model) updateChapters(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // it already exists, otherwise builds it. force (G/Q) always rebuilds. With no
 // chapters selected the scope is the whole course (resolveGenTarget).
 func (m Model) generateOrOpenScoped(kind string, force bool) (tea.Model, tea.Cmd) {
+	m.back = stateChapters
 	files := m.scopedChapters()
 	path, title := m.resolveGenTarget(kind, m.chapCourse, files)
 	if !force {
@@ -86,6 +87,9 @@ func (m Model) generateOrOpenScoped(kind string, force bool) (tea.Model, tea.Cmd
 				return mm, cmd
 			}
 		}
+	}
+	if kind == "qa" {
+		return m.promptQACount(m.chapCourse, files)
 	}
 	return m.startGenerate(kind, m.chapCourse, files)
 }

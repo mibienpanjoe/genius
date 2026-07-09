@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,9 +16,10 @@ import (
 
 // genDoneMsg carries a freshly generated guide/qa artifact back to the UI thread.
 type genDoneMsg struct {
-	kind string // "guide" or "qa"
-	md   string
-	err  error
+	kind  string // "guide" or "qa"
+	md    string
+	err   error
+	epoch int // the work epoch this result belongs to (stale results ignored)
 }
 
 // generateOrOpen is the home action for the g/q keys: open the existing artifact
@@ -26,6 +29,7 @@ func (m Model) generateOrOpen(kind string, force bool) (tea.Model, tea.Cmd) {
 	if len(m.courses) == 0 {
 		return m, nil
 	}
+	m.back = stateHome
 	c := m.courses[m.cursor]
 	has := c.HasGuide
 	if kind == "qa" {
@@ -33,6 +37,9 @@ func (m Model) generateOrOpen(kind string, force bool) (tea.Model, tea.Cmd) {
 	}
 	if has && !force {
 		return m.openReader(kind)
+	}
+	if kind == "qa" {
+		return m.promptQACount(c.Name, nil)
 	}
 	return m.startGenerate(kind, c.Name, nil)
 }
@@ -61,11 +68,73 @@ func (m Model) startGenerate(kind, course string, files []string) (tea.Model, te
 	m.genKind = kind
 	m.genCourse = course
 	m.genPath, m.genTitle = m.resolveGenTarget(kind, course, files)
+	m.genScope = strings.TrimSuffix(m.genTitle, genLabel(kind))
 	m.state = stateGenerating
+	ctx, epoch := m.beginWork()
 	if m.reduceMotion {
-		return m, genCmd(m.eng, kind, course, material)
+		return m, genCmd(ctx, m.eng, kind, course, material, m.genCount, epoch)
 	}
-	return m, tea.Batch(m.spinner.Tick, genCmd(m.eng, kind, course, material))
+	return m, tea.Batch(m.spinner.Tick, genCmd(ctx, m.eng, kind, course, material, m.genCount, epoch))
+}
+
+// promptQACount defers Q&A generation behind a count entry (FR-054): it stashes
+// the pending scope, seeds the input with the default, and shows the prompt. The
+// engine is checked up front so a missing one never reaches the input.
+func (m Model) promptQACount(course string, files []string) (tea.Model, tea.Cmd) {
+	if m.eng == nil {
+		m.notice = "no engine available to generate"
+		m.noticeLvl = lvlWarn
+		return m, nil
+	}
+	m.qaCourse = course
+	m.qaFiles = files
+	m.qaInput.SetValue("")
+	m.qaInput.Focus()
+	m.state = stateQACount
+	return m, nil
+}
+
+// updateQACount drives the count entry: enter starts generation with the typed
+// count (blank = default), esc returns to the originating screen.
+func (m Model) updateQACount(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.state = m.back
+		return m, nil
+	case "enter":
+		m.genCount = 0 // blank/invalid falls back to DefaultQACount
+		if n, err := strconv.Atoi(strings.TrimSpace(m.qaInput.Value())); err == nil && n > 0 {
+			m.genCount = n
+		}
+		return m.startGenerate("qa", m.qaCourse, m.qaFiles)
+	}
+	var cmd tea.Cmd
+	m.qaInput, cmd = m.qaInput.Update(msg)
+	return m, cmd
+}
+
+// viewQACount renders the pair-count prompt before Q&A generation.
+func (m Model) viewQACount() string {
+	scope := m.qaCourse
+	if len(m.qaFiles) > 0 {
+		scope = m.qaCourse + "/" + workspace.ScopeName(m.qaFiles)
+	}
+	body := styleTitle.Render("Q&A · "+scope) + "\n\n" +
+		styleBody.Render("how many Q&A pairs? ") + m.qaInput.View() + "\n\n" +
+		styleMuted.Render("default "+strconv.Itoa(generate.DefaultQACount)+" · enter generate · esc back")
+	return lipgloss.NewStyle().Padding(2, 0, 0, 3).Render(body)
+}
+
+// digitsOnly rejects any non-digit keystroke in the count input.
+func digitsOnly(s string) error {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return errors.New("digits only")
+		}
+	}
+	return nil
 }
 
 // resolveGenTarget maps a generation scope to its artifact path and reader
@@ -73,10 +142,9 @@ func (m Model) startGenerate(kind, course string, files []string) (tea.Model, te
 // files — or every chapter selected — targets the whole-course slot; any
 // narrower selection targets a scoped artifact under the course subdir.
 func (m Model) resolveGenTarget(kind, course string, files []string) (path, title string) {
-	label := " · guide"
+	label := genLabel(kind)
 	var whole string
 	if kind == "qa" {
-		label = " · q&a"
 		path, whole = m.ws.QATarget(course, files), m.ws.QAPath(course)
 	} else {
 		path, whole = m.ws.GuideTarget(course, files), m.ws.GuidePath(course)
@@ -85,6 +153,14 @@ func (m Model) resolveGenTarget(kind, course string, files []string) (path, titl
 		return path, course + label
 	}
 	return path, course + "/" + workspace.ScopeName(files) + label
+}
+
+// genLabel is the reader-title suffix for a generation kind.
+func genLabel(kind string) string {
+	if kind == "qa" {
+		return " · q&a"
+	}
+	return " · guide"
 }
 
 // courseGrounding returns the grounding blob for a generation: the whole course
@@ -96,9 +172,9 @@ func (m Model) courseGrounding(course string, files []string) (string, error) {
 	return m.ws.CourseMaterial(course)
 }
 
-// genCmd runs the generator off the UI goroutine and reports the result. Q&A
-// uses the default count/scope; narrower control stays a CLI concern.
-func genCmd(eng engine.Engine, kind, course, material string) tea.Cmd {
+// genCmd runs the generator off the UI goroutine and reports the result. count
+// sets the Q&A pair target (<=0 = DefaultQACount); it is ignored for guides.
+func genCmd(ctx context.Context, eng engine.Engine, kind, course, material string, count, epoch int) tea.Cmd {
 	return func() tea.Msg {
 		var (
 			md  string
@@ -106,11 +182,11 @@ func genCmd(eng engine.Engine, kind, course, material string) tea.Cmd {
 		)
 		switch kind {
 		case "guide":
-			md, err = generate.Guide(context.Background(), eng, course, material)
+			md, err = generate.Guide(ctx, eng, course, material)
 		case "qa":
-			md, err = generate.QA(context.Background(), eng, course, material, generate.QAOpts{})
+			md, err = generate.QA(ctx, eng, course, material, generate.QAOpts{Count: count})
 		}
-		return genDoneMsg{kind: kind, md: md, err: err}
+		return genDoneMsg{kind: kind, md: md, err: err, epoch: epoch}
 	}
 }
 
@@ -118,6 +194,10 @@ func genCmd(eng engine.Engine, kind, course, material string) tea.Cmd {
 // regenerate works), refreshes the dashboard chip counts, then opens the result
 // in the reader.
 func (m Model) genDone(msg genDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.epoch != m.workEpoch {
+		return m, nil // superseded or cancelled — ignore this result
+	}
+	m.cancel = nil
 	if msg.err != nil {
 		m.notice = "generate failed: " + msg.err.Error()
 		m.noticeLvl = lvlErr
@@ -134,6 +214,11 @@ func (m Model) genDone(msg genDoneMsg) (tea.Model, tea.Cmd) {
 
 	// Re-scan so a new scoped artifact shows up in the chip counts immediately.
 	m.refreshCourses(m.genCourse)
+	// Refresh the chapter badges too, so the ✓ is current when the reader is
+	// closed back into the chapter hub.
+	if m.back == stateChapters {
+		m.loadChapScopes()
+	}
 
 	mm, cmd, err := m.openReaderPath(m.genPath, m.genTitle)
 	if err != nil {
@@ -151,7 +236,11 @@ func (m Model) viewGenerating() string {
 	if m.genKind == "qa" {
 		what = "Q&A"
 	}
-	body := m.spinnerHead() + "generating " + what + " for " + m.genCourse +
+	scope := m.genScope
+	if scope == "" {
+		scope = m.genCourse
+	}
+	body := m.spinnerHead() + "generating " + what + " for " + scope +
 		" with " + m.engine + "…\n\n" + styleMuted.Render("grounded only in the course material")
 	return lipgloss.NewStyle().Padding(2, 0, 0, 3).Render(body)
 }

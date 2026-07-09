@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -146,7 +147,8 @@ func TestGenerateGuideFlow(t *testing.T) {
 	}
 
 	// Drive the async generate command and feed its result back.
-	done, _ := g.(Model).Update(genCmd(eng, "guide", "algebra", "material")())
+	gm := g.(Model)
+	done, _ := gm.Update(genCmd(context.Background(), eng, "guide", "algebra", "material", 0, gm.workEpoch)())
 	dm := done.(Model)
 	if eng.Calls != 1 {
 		t.Errorf("engine should be called once, got %d", eng.Calls)
@@ -192,6 +194,185 @@ func TestGenerateNoMaterialRefuses(t *testing.T) {
 	}
 	if !strings.Contains(gm.notice, "no source material") {
 		t.Errorf("want no-material notice, got %q", gm.notice)
+	}
+}
+
+// TestScopedQAFlow exercises the chapter-scoped Q&A path end to end: the count
+// prompt gates generation, the spinner names the chosen chapter scope (not just
+// the course), and closing the reader returns to the chapter hub it came from.
+func TestScopedQAFlow(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ws.Path("courses", "algebra"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"chap01.md", "chap02.md"} {
+		if err := os.WriteFile(ws.Path("courses", "algebra", f),
+			[]byte("# Algebra\nRings and fields.\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	eng := &engine.Fake{Reply: "## Q1. What is a ring?\n\nA set with two operations."}
+	courses := []workspace.Course{{Name: "algebra"}}
+
+	m := New("fake", eng, ws, courses)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// Enter the chapter hub and scope to a single chapter.
+	fm, _ := mm.(Model).Update(keyRunes("f"))
+	if fm.(Model).state != stateChapters {
+		t.Fatalf("f should open chapters, state=%d", fm.(Model).state)
+	}
+	scoped := workspace.Slug(fm.(Model).chapFiles[0])
+	sel, _ := fm.(Model).Update(keyRunes(" ")) // select chapter at cursor 0
+
+	// Q&A (force) → the count prompt, remembering chapters as the return screen.
+	pm, _ := sel.(Model).Update(keyRunes("Q"))
+	pv := pm.(Model)
+	if pv.state != stateQACount {
+		t.Fatalf("Q should prompt for count, state=%d", pv.state)
+	}
+	if pv.back != stateChapters {
+		t.Errorf("count prompt should return to chapters, back=%d", pv.back)
+	}
+
+	// Type a count and confirm.
+	typed, _ := pv.Update(keyRunes("8"))
+	gen, _ := typed.(Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	gv := gen.(Model)
+	if gv.state != stateGenerating {
+		t.Fatalf("enter should start generating, state=%d", gv.state)
+	}
+	if gv.genCount != 8 {
+		t.Errorf("genCount should be 8, got %d", gv.genCount)
+	}
+	wantScope := "algebra/" + scoped
+	if gv.genScope != wantScope {
+		t.Errorf("genScope = %q, want %q", gv.genScope, wantScope)
+	}
+	if out := gv.viewGenerating(); !strings.Contains(out, wantScope) {
+		t.Errorf("spinner should name the chapter scope %q, got %q", wantScope, out)
+	}
+
+	// Drive the async generate and land in the reader.
+	done, _ := gv.Update(genCmd(context.Background(), eng, "qa", "algebra", "material", 8, gv.workEpoch)())
+	dm := done.(Model)
+	if dm.state != stateReader {
+		t.Fatalf("generate should open the reader, state=%d", dm.state)
+	}
+	if _, err := os.Stat(ws.ChapterQAPath("algebra", scoped)); err != nil {
+		t.Errorf("scoped Q&A not written: %v", err)
+	}
+
+	// Closing the reader returns to the chapter hub, not home.
+	back, _ := dm.Update(keyRunes("q"))
+	if back.(Model).state != stateChapters {
+		t.Errorf("reader back should return to chapters, state=%d", back.(Model).state)
+	}
+}
+
+// TestQACountDefault confirms a blank count leaves genCount at 0 so the
+// generator applies DefaultQACount.
+func TestQACountDefault(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ws.Path("courses", "algebra"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ws.Path("courses", "algebra", "chap01.md"),
+		[]byte("# Algebra\nRings.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eng := &engine.Fake{Reply: "## Q1. x\n\ny"}
+	m := New("fake", eng, ws, []workspace.Course{{Name: "algebra"}})
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// q on a course with no Q&A → count prompt, whole-course scope.
+	pm, _ := mm.(Model).Update(keyRunes("q"))
+	pv := pm.(Model)
+	if pv.state != stateQACount {
+		t.Fatalf("q should prompt for count, state=%d", pv.state)
+	}
+	if pv.genScope != "" && pv.back != stateHome {
+		t.Errorf("home Q&A should return home, back=%d", pv.back)
+	}
+	// Enter with no input → default (genCount stays 0).
+	gen, _ := pv.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	gv := gen.(Model)
+	if gv.state != stateGenerating {
+		t.Fatalf("enter should start generating, state=%d", gv.state)
+	}
+	if gv.genCount != 0 {
+		t.Errorf("blank count should leave genCount 0 (default), got %d", gv.genCount)
+	}
+	if gv.genScope != "algebra" {
+		t.Errorf("whole-course scope should be %q, got %q", "algebra", gv.genScope)
+	}
+}
+
+// TestCancelGenerationStaysInApp verifies that stopping a generation returns to
+// the launching screen instead of quitting genius, and that the abandoned
+// result is discarded when it finally arrives.
+func TestCancelGenerationStaysInApp(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ws.Path("courses", "algebra"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ws.Path("courses", "algebra", "chap01.md"),
+		[]byte("# Algebra\nRings.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eng := &engine.Fake{Reply: "# Study Guide\n\nKey ideas."}
+	m := New("fake", eng, ws, []workspace.Course{{Name: "algebra"}})
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// Start a guide generation, then abort it with esc.
+	g, _ := mm.(Model).Update(keyRunes("g"))
+	gv := g.(Model)
+	if gv.state != stateGenerating {
+		t.Fatalf("g should enter generating, state=%d", gv.state)
+	}
+	staleEpoch := gv.workEpoch
+
+	// ctrl+c stays the hard-quit even mid-generation.
+	if _, cmd := gv.Update(tea.KeyMsg{Type: tea.KeyCtrlC}); cmd == nil {
+		t.Error("ctrl+c during generation should quit the app")
+	}
+
+	stopped, cmd := gv.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	sv := stopped.(Model)
+	if cmd != nil {
+		t.Error("esc during generation should not quit the app")
+	}
+	if sv.state != stateHome {
+		t.Errorf("cancel should return to home, state=%d", sv.state)
+	}
+	if sv.workEpoch == staleEpoch {
+		t.Error("cancel should bump the work epoch")
+	}
+
+	// The in-flight result now arrives late; it must be ignored.
+	late, _ := sv.Update(genDoneMsg{kind: "guide", md: "# Study Guide", epoch: staleEpoch})
+	lv := late.(Model)
+	if lv.state != stateHome {
+		t.Errorf("stale result should be ignored, state=%d", lv.state)
+	}
+	if _, err := os.Stat(ws.GuidePath("algebra")); err == nil {
+		t.Error("cancelled generation must not write an artifact")
 	}
 }
 

@@ -54,6 +54,7 @@ type ingestDoneMsg struct {
 	ingested int
 	skipped  int
 	errs     []string
+	epoch    int // the work epoch this result belongs to (stale results ignored)
 }
 
 // openIngest enters the file browser, refusing up front when the converter is
@@ -269,6 +270,7 @@ func (m Model) runIngest() (tea.Model, tea.Cmd) {
 
 	m.ingInput.Blur()
 	m.notice = ""
+	m.back = stateHome
 	m.state = stateIngesting
 	job := ingestJob{
 		files:     sel,
@@ -277,14 +279,15 @@ func (m Model) runIngest() (tea.Model, tea.Cmd) {
 		overwrite: m.ingOverlay,
 		opts:      convert.IngestOpts{Describe: m.ingDescribe, MinImagePx: convert.DefaultMinImagePx},
 	}
+	ctx, epoch := m.beginWork()
 	if m.reduceMotion {
-		return m, ingestCmd(m.eng, m.ws, job)
+		return m, ingestCmd(ctx, m.eng, m.ws, job, epoch)
 	}
-	return m, tea.Batch(m.spinner.Tick, ingestCmd(m.eng, m.ws, job))
+	return m, tea.Batch(m.spinner.Tick, ingestCmd(ctx, m.eng, m.ws, job, epoch))
 }
 
 // ingestCmd converts and files each selected document off the UI goroutine.
-func ingestCmd(eng engine.Engine, ws workspace.Workspace, job ingestJob) tea.Cmd {
+func ingestCmd(ctx context.Context, eng engine.Engine, ws workspace.Workspace, job ingestJob, epoch int) tea.Cmd {
 	return func() tea.Msg {
 		var ingested, skipped int
 		var errs []string
@@ -306,7 +309,7 @@ func ingestCmd(eng engine.Engine, ws workspace.Workspace, job ingestJob) tea.Cmd
 				assets = ws.Path("exercises", job.target, "assets")
 			}
 
-			res, err := convert.Ingest(context.Background(), f, assets, eng, job.opts)
+			res, err := convert.Ingest(ctx, f, assets, eng, job.opts)
 			if err != nil {
 				errs = append(errs, filepath.Base(f)+": "+err.Error())
 				continue
@@ -321,13 +324,17 @@ func ingestCmd(eng engine.Engine, ws workspace.Workspace, job ingestJob) tea.Cmd
 				ingested++
 			}
 		}
-		return ingestDoneMsg{course: course, ingested: ingested, skipped: skipped, errs: errs}
+		return ingestDoneMsg{course: course, ingested: ingested, skipped: skipped, errs: errs, epoch: epoch}
 	}
 }
 
 // ingestDone refreshes the course list, points the cursor at the affected
 // course, and reports a summary.
 func (m Model) ingestDone(msg ingestDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.epoch != m.workEpoch {
+		return m, nil // superseded or cancelled — ignore this result
+	}
+	m.cancel = nil
 	m.refreshCourses(msg.course)
 
 	// Nothing landed and nothing failed — every file already existed: keep the
