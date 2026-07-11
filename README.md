@@ -210,6 +210,10 @@ lecture material (so problems never pollute the guide/Q&A grounding):
 genius ingest td1.pdf --kind exercise --course algebra   # → exercises/algebra/td1.md
 ```
 
+The target course must already exist (ingest its material first) — a typo'd
+`--course` is refused rather than filing the set under a name no dashboard
+lists.
+
 Then `solve` enumerates the set and works the exercises you pick, grounded only
 in the course. The tutor solves each one **as stated** and flags any gap in the
 material rather than inventing a method.
@@ -219,6 +223,9 @@ genius solve algebra --set td1                 # list the exercises (and sub-par
 genius solve algebra --set td1 --ex 2,3.1      # work exercise 2 and sub-part 3.1
 genius solve algebra --set td1 --ex 2 --save   # also write td1.solutions.md (source untouched)
 ```
+
+Saved solutions live next to the set but are never listed as a solvable set
+themselves, and don't count toward the home dashboard's `e·N` chip.
 
 Sub-parts are addressed `<exercise>.<part>` — `3.1`, `3.a`. In the TUI, press
 `s` to do the same: pick a set, toggle exercises with `space`, `enter` to solve.
@@ -230,7 +237,7 @@ genius owns a study home, resolved as `$GENIUS_HOME`, else `~/study`:
 ```
 ~/study/
   courses/<name>/*.md       ingested / source markdown
-  courses/<name>/assets/    figures extracted during ingest
+  courses/<name>/assets/    figures extracted during ingest (prefixed per source doc)
   guides/<name>.md          generated study guides
   qa/<name>.md              generated revision Q&A
   exercises/<name>/*         exercise sets (+ assets/)
@@ -272,7 +279,14 @@ Ingest, guide, qa, reader, quiz, and exercise solving (`solve`) all work
 end-to-end against real material, in both the CLI and the TUI — including
 in-app ingest, generation, and per-chapter scoping (v0.2.0). v0.3.0 adds a Q&A
 count prompt, a scope-aware generating spinner, origin-aware reader back, and
-`esc`-cancelable generation. Post-MVP: quiz weak-spot tracking.
+`esc`-cancelable generation. A v0.3.1 bug sweep hardened multi-document
+ingest (per-document asset naming — chapters of one course no longer overwrite
+each other's figures), moved the notation check ahead of figure captions so a
+caption can't mask dropped complement bars, fixed a quiz-renderer panic on
+4-digit question numbers and merged-session progress numbering, switched the
+`claude` engine to stdin (whole-course prompts exceeded the kernel's 128 KiB
+argv cap), and made exercise ingest validate its target course. Post-MVP: quiz
+weak-spot tracking.
 
 ## Contributing
 
