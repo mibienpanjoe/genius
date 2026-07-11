@@ -115,6 +115,14 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// CourseExists reports whether name is a course: a directory under courses/.
+// Exercise ingestion targets an existing course; without this check a typo'd
+// --course files an orphaned set no dashboard ever lists.
+func (w Workspace) CourseExists(name string) bool {
+	info, err := os.Stat(w.Path("courses", name))
+	return err == nil && info.IsDir()
+}
+
 // countMarkdown counts *.md files directly under dir (exercise sets, scoped
 // guides/Q&A). Saved solutions (<set>.solutions.md) are solve output, not
 // study artifacts, so they don't count.

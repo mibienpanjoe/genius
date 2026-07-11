@@ -92,6 +92,10 @@ func runIngest(cmd *cobra.Command, file string) error {
 		if ingestCourse == "" {
 			return errors.New("--kind exercise requires --course <name>")
 		}
+		if !ws.CourseExists(ingestCourse) {
+			return fmt.Errorf("no course %q to attach exercises to — ingest its material first: "+
+				"genius ingest <file> --name %s", ingestCourse, ingestCourse)
+		}
 		set := ingestName
 		if set == "" {
 			set = workspace.Slug(file)

@@ -490,6 +490,39 @@ func TestIngestOptsValidation(t *testing.T) {
 	}
 }
 
+// An exercise set aimed at a course with no material must be refused on the
+// form — the orphaned set would be invisible to every dashboard.
+func TestIngestExerciseUnknownCourseRefused(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	ws, err := workspace.Open(workspace.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := New("claude", nil, ws, nil)
+	m.ingSelected = map[string]bool{"/x/td1.pdf": true}
+	m.ingKind = "exercise"
+	m.state = stateIngestOpts
+	m.ingInput.SetValue("ghost")
+
+	res, _ := m.updateIngestOpts(tea.KeyMsg{Type: tea.KeyEnter})
+	rm := res.(Model)
+	if rm.state != stateIngestOpts {
+		t.Errorf("unknown course should stay on the form, state=%d", rm.state)
+	}
+	if !strings.Contains(rm.notice, "no course ghost") {
+		t.Errorf("want an unknown-course notice, got %q", rm.notice)
+	}
+
+	// With the course present, the same enter proceeds to the spinner.
+	mustMkdir(t, ws.Path("courses", "ghost"))
+	ok, _ := rm.updateIngestOpts(tea.KeyMsg{Type: tea.KeyEnter})
+	if ok.(Model).state != stateIngesting {
+		t.Errorf("existing course should start ingesting, state=%d", ok.(Model).state)
+	}
+}
+
 func TestIngestDoneRefresh(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GENIUS_HOME", dir)

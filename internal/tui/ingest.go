@@ -267,6 +267,11 @@ func (m Model) runIngest() (tea.Model, tea.Cmd) {
 			m.noticeLvl = lvlWarn
 			return m, nil
 		}
+		if !m.ws.CourseExists(target) {
+			m.notice = "no course " + target + " — ingest its material first"
+			m.noticeLvl = lvlWarn
+			return m, nil
+		}
 	}
 
 	m.ingInput.Blur()
