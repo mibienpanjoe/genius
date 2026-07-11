@@ -355,7 +355,8 @@ func (m Model) viewStatusBar() string {
 	case stateReader:
 		hints = "↑/↓ scroll · q back"
 	case stateQuiz:
-		hints = "quiz · q back"
+		// q types into the answer field pre-reveal; esc is the reliable exit.
+		hints = "quiz · esc back"
 	case stateExSets:
 		hints = "↑/↓ pick set · enter open · esc back"
 	case stateExList:

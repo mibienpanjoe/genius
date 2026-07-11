@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -235,7 +236,9 @@ func (m Model) viewQuiz() string {
 	}
 	p := m.pairs[m.qIndex]
 
-	progress := styleMuted.Render("Q " + itoa(p.N) + "/" + itoa(len(m.pairs)))
+	// Position in this session, not the pair's own N: merged sources restart
+	// their numbering per file, so p.N would repeat and never reach the total.
+	progress := styleMuted.Render("Q " + strconv.Itoa(m.qIndex+1) + "/" + strconv.Itoa(len(m.pairs)))
 	q := styleBody.Bold(true).Render(p.Question)
 
 	var b string
@@ -266,9 +269,9 @@ func (m Model) viewQuiz() string {
 func (m Model) viewQuizSummary() string {
 	total := len(m.pairs)
 	body := styleTitle.Render("session complete") + "\n\n" +
-		styleBody.Render("questions: "+itoa(total)) + "\n" +
-		lipgloss.NewStyle().Foreground(cSuccess).Render("knew it: "+itoa(m.knew)) + "\n" +
-		lipgloss.NewStyle().Foreground(cError).Render("missed:  "+itoa(m.missed)) + "\n\n" +
+		styleBody.Render("questions: "+strconv.Itoa(total)) + "\n" +
+		lipgloss.NewStyle().Foreground(cSuccess).Render("knew it: "+strconv.Itoa(m.knew)) + "\n" +
+		lipgloss.NewStyle().Foreground(cError).Render("missed:  "+strconv.Itoa(m.missed)) + "\n\n" +
 		styleMuted.Render("q or enter to return home")
 	card := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

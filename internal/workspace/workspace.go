@@ -115,7 +115,9 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// countMarkdown counts *.md files directly under dir (exercise sets).
+// countMarkdown counts *.md files directly under dir (exercise sets, scoped
+// guides/Q&A). Saved solutions (<set>.solutions.md) are solve output, not
+// study artifacts, so they don't count.
 func countMarkdown(dir string) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -123,7 +125,8 @@ func countMarkdown(dir string) int {
 	}
 	n := 0
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") &&
+			!strings.HasSuffix(e.Name(), ".solutions.md") {
 			n++
 		}
 	}

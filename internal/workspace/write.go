@@ -44,25 +44,46 @@ func (w Workspace) ChapterQAPath(course, scope string) string {
 }
 
 // ScopeName builds the scoped-artifact basename from chapter filenames: each
-// file's slug (sans .md), sorted, joined with "+". chap02.md,chap01.md ->
-// "chap01+chap02".
+// file's slug (sans .md), deduplicated, sorted, joined with "+".
+// chap02.md,chap01.md -> "chap01+chap02".
 func ScopeName(files []string) string {
-	parts := make([]string, len(files))
-	for i, f := range files {
-		parts[i] = Slug(f)
+	seen := make(map[string]bool, len(files))
+	var parts []string
+	for _, f := range files {
+		if s := Slug(f); !seen[s] {
+			seen[s] = true
+			parts = append(parts, s)
+		}
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "+")
 }
 
 // scopeIsWhole reports whether a chapter selection means the whole course: an
-// empty selection, or every chapter selected.
+// empty selection, or every chapter selected. Membership is checked, not just
+// the count, so duplicated or unknown filenames never claim the whole-course
+// slot.
 func (w Workspace) scopeIsWhole(course string, files []string) bool {
 	if len(files) == 0 {
 		return true
 	}
 	all, err := w.CourseFiles(course)
-	return err == nil && len(all) > 0 && len(files) == len(all)
+	if err != nil || len(all) == 0 {
+		return false
+	}
+	selected := make(map[string]bool, len(files))
+	for _, f := range files {
+		selected[f] = true
+	}
+	if len(selected) != len(all) {
+		return false
+	}
+	for _, a := range all {
+		if !selected[a] {
+			return false
+		}
+	}
+	return true
 }
 
 // GuideTarget / QATarget resolve where a generation should be written: the

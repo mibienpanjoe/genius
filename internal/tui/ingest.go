@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -477,7 +478,7 @@ func (m Model) viewIngestOpts() string {
 }
 
 func (m Model) viewIngesting() string {
-	body := m.spinnerHead() + "ingesting " + itoa(len(m.selectedFiles())) +
+	body := m.spinnerHead() + "ingesting " + strconv.Itoa(len(m.selectedFiles())) +
 		" file(s) with markitdown…\n\n" +
 		styleMuted.Render("converting to markdown and extracting figures")
 	return lipgloss.NewStyle().Padding(2, 0, 0, 3).Render(body)

@@ -78,6 +78,41 @@ func TestEscalateNotationAssembly(t *testing.T) {
 	}
 }
 
+func TestDocSlugPerDocumentPrefix(t *testing.T) {
+	cases := map[string]string{
+		"/tmp/Chap 01 — Logique.pdf": "chap-01-logique",
+		"/x/td1.pdf":                 "td1",
+		"/x/….pdf":                   "doc",
+	}
+	for in, want := range cases {
+		if got := docSlug(in); got != want {
+			t.Errorf("docSlug(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// Two documents ingested into the same assets dir must not share a prefix.
+	if docSlug("/a/chap01.pdf") == docSlug("/a/chap02.pdf") {
+		t.Error("distinct documents must get distinct asset prefixes")
+	}
+}
+
+func TestClearStaleRemovesOnlyPrefix(t *testing.T) {
+	dir := t.TempDir()
+	mine := dir + "/chap01-img-000.png"
+	other := dir + "/chap02-img-000.png"
+	for _, f := range []string{mine, other} {
+		if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clearStale(dir + "/chap01-img")
+	if _, err := os.Stat(mine); err == nil {
+		t.Error("stale file with matching prefix should be removed")
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Error("other document's assets must be left alone")
+	}
+}
+
 func TestFigureSectionCaption(t *testing.T) {
 	f := &engine.Fake{DescribeReply: "A two-input AND gate with output Q = A∧B."}
 	imgs := []ExtractedImage{{Path: "/w/assets/img-000.png", Page: 2, W: 300, H: 200}}

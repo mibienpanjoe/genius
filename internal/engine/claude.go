@@ -21,7 +21,10 @@ func (e *claudeEngine) Generate(ctx context.Context, sys, user string) (string, 
 		return "", fmt.Errorf("%w: claude", ErrNotInstalled)
 	}
 
-	args := []string{"-p", user}
+	// The user prompt embeds the whole course material, which can exceed the
+	// kernel's per-argument exec limit (128 KiB on Linux) — pass it on stdin;
+	// print mode reads the prompt from there when no positional arg is given.
+	args := []string{"-p"}
 	if strings.TrimSpace(sys) != "" {
 		args = append(args, "--append-system-prompt", sys)
 	}
@@ -30,6 +33,7 @@ func (e *claudeEngine) Generate(ctx context.Context, sys, user string) (string, 
 	}
 
 	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd.Stdin = strings.NewReader(user)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

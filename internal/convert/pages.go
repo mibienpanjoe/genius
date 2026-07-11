@@ -28,7 +28,8 @@ func renderPages(ctx context.Context, pdf, dir string) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	prefix := filepath.Join(dir, "page")
+	prefix := filepath.Join(dir, docSlug(pdf)+"-page")
+	clearStale(prefix)
 	cmd := exec.CommandContext(ctx, "pdftoppm", "-png", "-r", "150", pdf, prefix)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("pdftoppm: %w: %s", err, strings.TrimSpace(string(out)))

@@ -21,6 +21,7 @@ var helpKeys = []struct {
 		{"s", "solve exercises"},
 		{"i", "ingest a document"},
 		{"f", "chapter hub (per-chapter guides/q&a)"},
+		{"?", "this help"},
 	}},
 	{"ingest", [][2]string{
 		{"↑/↓", "browse · enter open dir / pick file"},
@@ -50,7 +51,6 @@ var helpKeys = []struct {
 		{"esc", "back"},
 	}},
 	{"global", [][2]string{
-		{"?", "this help"},
 		{"ctrl+c", "quit"},
 	}},
 }

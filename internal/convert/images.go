@@ -25,6 +25,42 @@ func imagesAvailable() bool {
 	return err == nil
 }
 
+// docSlug derives a per-document asset prefix from the source filename. Every
+// document ingested into a course shares one assets dir, so a fixed prefix
+// would make a second ingest overwrite the first document's figures — and
+// leave stale files that the extraction glob would misattribute to the wrong
+// metadata rows.
+func docSlug(path string) string {
+	base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	base = strings.ToLower(base)
+	var b strings.Builder
+	dash := false
+	for _, r := range base {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			dash = false
+		} else if !dash {
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "doc"
+	}
+	return out
+}
+
+// clearStale removes files matching prefix-*.png so a re-ingest of the same
+// document never leaves orphans behind for the caller's glob to pick up.
+func clearStale(prefix string) {
+	if stale, err := filepath.Glob(prefix + "-*.png"); err == nil {
+		for _, s := range stale {
+			os.Remove(s)
+		}
+	}
+}
+
 // extractImages pulls embedded raster images from a PDF into dir as PNGs,
 // skipping images whose width and height are both below minPx (decorative
 // bullets/logos). Returns the kept images with page/size metadata (FR-035a).
@@ -41,7 +77,8 @@ func extractImages(ctx context.Context, pdf, dir string, minPx int) ([]Extracted
 		return nil, err
 	}
 
-	prefix := filepath.Join(dir, "img")
+	prefix := filepath.Join(dir, docSlug(pdf)+"-img")
+	clearStale(prefix)
 	cmd := exec.CommandContext(ctx, "pdfimages", "-png", pdf, prefix)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("pdfimages extract: %w: %s", err, strings.TrimSpace(string(out)))

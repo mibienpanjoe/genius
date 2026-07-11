@@ -53,6 +53,11 @@ func Ingest(ctx context.Context, path, assetsDir string, eng engine.Engine, opts
 		minPx = DefaultMinImagePx
 	}
 
+	// Check the text layer BEFORE figure captions are appended: a vision caption
+	// that itself carries a complement bar would otherwise mask bars dropped
+	// from the body text (INV-12).
+	banner := notationWarning(md)
+
 	isPDF := strings.EqualFold(filepath.Ext(path), ".pdf")
 
 	var assets []string
@@ -65,7 +70,7 @@ func Ingest(ctx context.Context, path, assetsDir string, eng engine.Engine, opts
 		}
 	}
 
-	if banner := notationWarning(md); banner != "" {
+	if banner != "" {
 		// Escalate-on-detect: the text layer looks like it dropped complement
 		// bars. For PDFs with a vision engine, rasterize the pages and have the
 		// model re-transcribe them, recovering notation that lives only in the

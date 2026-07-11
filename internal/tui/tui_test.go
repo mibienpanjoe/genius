@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mibienpanjoe/genius/internal/engine"
+	"github.com/mibienpanjoe/genius/internal/quiz"
 	"github.com/mibienpanjoe/genius/internal/workspace"
 )
 
@@ -750,6 +751,26 @@ func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Merged quiz sources restart their Q numbering per file; the progress line
+// must show the session position, not the pair's own N — and a large N from a
+// malformed file (## Q1000.) must not crash the renderer.
+func TestQuizProgressUsesSessionPosition(t *testing.T) {
+	m := New("claude", nil, workspace.Workspace{Root: "/x"}, nil)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	qm := mm.(Model).enterQuiz("algebra", []quiz.Pair{
+		{N: 1, Question: "a?", Answer: "a"},
+		{N: 1000, Question: "b?", Answer: "b"}, // repeated/large N from a merged file
+	})
+
+	if out := qm.viewQuiz(); !strings.Contains(out, "Q 1/2") {
+		t.Errorf("first question should show Q 1/2, got %q", out)
+	}
+	qm = qm.nextQuestion()
+	if out := qm.viewQuiz(); !strings.Contains(out, "Q 2/2") {
+		t.Errorf("second question should show Q 2/2 (not the pair's N), got %q", out)
 	}
 }
 

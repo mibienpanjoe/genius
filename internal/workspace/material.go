@@ -67,7 +67,9 @@ func (w Workspace) ExerciseSets(course string) ([]string, error) {
 	}
 	var sets []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+		// <set>.solutions.md is `solve --save` output, not a solvable set.
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") &&
+			!strings.HasSuffix(e.Name(), ".solutions.md") {
 			sets = append(sets, strings.TrimSuffix(e.Name(), ".md"))
 		}
 	}

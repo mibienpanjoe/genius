@@ -132,6 +132,10 @@ func TestScopeName(t *testing.T) {
 	if got := ScopeName([]string{"chap02.md", "chap01.md"}); got != "chap01+chap02" {
 		t.Errorf("combined scope want chap01+chap02, got %q", got)
 	}
+	// duplicates collapse to one slug
+	if got := ScopeName([]string{"chap01.md", "chap01.md"}); got != "chap01" {
+		t.Errorf("duplicate files should dedupe, got %q", got)
+	}
 }
 
 func TestGuideQATarget(t *testing.T) {
@@ -160,6 +164,43 @@ func TestGuideQATarget(t *testing.T) {
 	}
 	if got := w.QATarget("algebra", []string{"chap01.md", "chap02.md"}); got != w.ChapterQAPath("algebra", "chap01+chap02") {
 		t.Errorf("span should target a combined qa, got %s", got)
+	}
+	// duplicated file matching the chapter count must NOT claim the whole-course
+	// slot — it is still a single-chapter scope.
+	dup := []string{"chap01.md", "chap01.md", "chap01.md"}
+	if got := w.GuideTarget("algebra", dup); got != w.ChapterGuidePath("algebra", "chap01") {
+		t.Errorf("duplicated selection should stay scoped, got %s", got)
+	}
+}
+
+// solve --save output (<set>.solutions.md) must not surface as a solvable
+// exercise set nor inflate the dashboard chip count.
+func TestSolutionsFileNotAnExerciseSet(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GENIUS_HOME", dir)
+	w, err := Open(Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, w.Path("courses", "algebra"))
+	mustMkdir(t, w.Path("exercises", "algebra"))
+	mustWrite(t, w.Path("exercises", "algebra", "td1.md"), "# td1")
+	mustWrite(t, w.Path("exercises", "algebra", "td1.solutions.md"), "# solved")
+
+	sets, err := w.ExerciseSets("algebra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sets) != 1 || sets[0] != "td1" {
+		t.Errorf("solutions file must be excluded from sets, got %v", sets)
+	}
+
+	courses, err := w.Courses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if courses[0].ExerciseSets != 1 {
+		t.Errorf("solutions file must not count as a set, got %d", courses[0].ExerciseSets)
 	}
 }
 
